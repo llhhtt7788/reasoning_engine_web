@@ -7,7 +7,7 @@ import { MessageList } from './MessageList';
 import { InputBar } from './InputBar';
 import { streamChat } from '@/lib/sseClient';
 
-const buildNextActions = (answerText: string): string[] => {
+const buildNextActions = (): string[] => {
   return [
     '是否需要将当前结论转化为一个 POC 验证方案？',
     '是否需要进一步量化成本或风险？',
@@ -54,7 +54,7 @@ export const ChatContainer: React.FC = () => {
         },
         onComplete: () => {
           // Generate next actions
-          const actions = buildNextActions('');
+          const actions = buildNextActions();
           setNextActions(actions);
           setStreaming(false);
         },

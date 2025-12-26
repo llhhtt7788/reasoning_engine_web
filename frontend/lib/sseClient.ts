@@ -10,7 +10,21 @@ export type StreamCallbacks = {
   onComplete: () => void;
 };
 
-function parseSSELine(line: string): any | null {
+interface SSEDelta {
+  content?: string;
+  reasoning?: string;
+  reasoning_content?: string;
+}
+
+interface SSEChoice {
+  delta?: SSEDelta;
+}
+
+interface SSEData {
+  choices?: SSEChoice[];
+}
+
+function parseSSELine(line: string): SSEData | null {
   if (!line) return null;
   
   let data = line.trim();
@@ -23,7 +37,7 @@ function parseSSELine(line: string): any | null {
   if (data === '[DONE]') return null;
   
   try {
-    return JSON.parse(data);
+    return JSON.parse(data) as SSEData;
   } catch {
     return null;
   }
