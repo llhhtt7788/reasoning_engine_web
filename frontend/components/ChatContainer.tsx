@@ -30,6 +30,7 @@ export const ChatContainer: React.FC = () => {
     
     let hasReasoningInResponse = false;
     let reasoningHintAdded = false;
+    let hasReceivedContent = false;
 
     await streamChat(
       message,
@@ -37,6 +38,7 @@ export const ChatContainer: React.FC = () => {
       {
         onContent: (content) => {
           updateLastAssistant(content);
+          hasReceivedContent = true;
           
           // Add reasoning hint after first content chunk if we detected reasoning
           if (hasReasoningInResponse && !reasoningHintAdded) {
@@ -47,6 +49,12 @@ export const ChatContainer: React.FC = () => {
         onReasoning: (reasoning) => {
           hasReasoningInResponse = true;
           updateLastAssistant('', reasoning);
+          
+          // If we've already received content, add the hint now
+          if (hasReceivedContent && !reasoningHintAdded) {
+            updateLastAssistant('\n\n> 🧠 本次回答包含推理过程，可在下方【思维链】中查看。');
+            reasoningHintAdded = true;
+          }
         },
         onError: (error) => {
           updateLastAssistant(`\n\n请求失败: ${error.message}`);
