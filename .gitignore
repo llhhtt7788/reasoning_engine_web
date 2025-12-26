@@ -26,6 +26,17 @@ ENV/
 env/
 .venv
 
+# Next.js
+.next/
+out/
+node_modules/
+*.log
+.vercel
+.env*.local
+
+# Allow frontend lib directory
+!frontend/lib/
+
 # IDEs
 .vscode/
 .idea/
