@@ -158,4 +158,7 @@ def chat():
 
 
 if __name__ == '__main__':
-    app.run(host='localhost', port=7860, debug=True)
+    # Note: debug=True is only for development. Set debug=False for production.
+    import os
+    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    app.run(host='localhost', port=7860, debug=debug_mode)

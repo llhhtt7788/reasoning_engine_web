@@ -72,6 +72,14 @@ python app.py
 http://localhost:7860
 ```
 
+**开发模式**（启用调试）：
+```bash
+export FLASK_DEBUG=true
+python app.py
+```
+
+⚠️ **安全提示**: 生产环境中请勿启用 DEBUG 模式！
+
 ### 方式二：Gradio 应用
 
 1. 安装 Gradio：
