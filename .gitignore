@@ -26,6 +26,14 @@ ENV/
 env/
 .venv
 
+# Next.js
+.next/
+out/
+node_modules/
+*.log
+.vercel
+.env*.local
+
 # IDEs
 .vscode/
 .idea/
