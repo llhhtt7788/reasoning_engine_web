@@ -34,6 +34,9 @@ node_modules/
 .vercel
 .env*.local
 
+# Allow frontend lib directory
+!frontend/lib/
+
 # IDEs
 .vscode/
 .idea/
