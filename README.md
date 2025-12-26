@@ -1,69 +1,182 @@
 # Reasoning Engine Web
 
-A web-based chat interface for interacting with AI reasoning models. This application provides a Gradio-based UI that supports streaming responses with reasoning chain visualization.
+医学 / 决策推理助手 - 支持 Gradio 和 Web 两种界面的聊天应用
 
-## Features
+## 项目简介
 
-- 💬 Interactive chat interface with streaming responses
-- 🧠 Reasoning chain visualization (for models that support it)
-- 📋 Next action suggestions after each response
-- 🔄 Chat history management
-- 🌐 Support for Server-Sent Events (SSE) streaming
+这是一个基于 AI 推理引擎的聊天应用，提供两种用户界面：
+- **Gradio 界面**: 快速原型和测试
+- **Web 界面**: 完整的生产级 Web 应用（Flask + HTML/CSS/JavaScript）
 
-## Prerequisites
+## 功能特性
 
-- Python 3.8 or higher
-- A reasoning engine API server running at `http://localhost:11211/api/v1/chat/context`
+- 💬 流式对话响应
+- 🧠 思维链展示（如模型支持）
+- 📋 智能下一步建议
+- 🔄 对话历史管理
+- 🎨 现代化响应式界面
+- ⚡ 实时消息流
 
-## Installation
-
-1. Clone the repository:
-```bash
-git clone https://github.com/llhhtt7788/reasoning_engine_web.git
-cd reasoning_engine_web
-```
-
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-## Usage
-
-1. Ensure your reasoning engine API server is running at `http://localhost:11211/api/v1/chat/context`
-
-2. Start the Gradio web interface:
-```bash
-python web/gradio_app.py
-```
-
-3. Open your browser and navigate to:
-```
-http://localhost:7860
-```
-
-## API Configuration
-
-The application expects the API to:
-- Accept POST requests with JSON payload containing:
-  - `user`: The user's message
-  - `stream`: Boolean indicating streaming mode
-  - `messages`: Array of previous chat messages
-- Return Server-Sent Events (SSE) with JSON data containing:
-  - `choices[0].delta.content`: Response content
-  - `choices[0].delta.reasoning` or `choices[0].delta.reasoning_content`: Reasoning chain
-
-## Project Structure
+## 目录结构
 
 ```
 reasoning_engine_web/
 ├── web/
-│   └── gradio_app.py    # Main Gradio application
-├── requirements.txt      # Python dependencies
-├── .gitignore           # Git ignore rules
-└── README.md            # This file
+│   ├── app.py                  # Flask 后端应用
+│   ├── gradio_app.py          # Gradio 应用（原始版本）
+│   ├── requirements.txt       # Python 依赖
+│   ├── static/
+│   │   ├── css/
+│   │   │   └── style.css      # 样式表
+│   │   └── js/
+│   │       └── app.js         # 前端 JavaScript
+│   └── templates/
+│       └── index.html         # HTML 模板
+└── README.md
 ```
+
+## 安装步骤
+
+### 1. 克隆仓库
+
+```bash
+git clone https://github.com/llhhtt7788/reasoning_engine_web.git
+cd reasoning_engine_web/web
+```
+
+### 2. 安装依赖
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. 配置 API 端点
+
+确保后端 API 服务运行在 `http://localhost:11211/api/v1/chat/context`
+
+如需修改 API 地址，请编辑：
+- Web 应用: `web/app.py` 中的 `API_URL` 变量
+- Gradio 应用: `web/gradio_app.py` 中的 `API_URL` 变量
+
+## 使用方法
+
+### 方式一：Web 应用（推荐）
+
+1. 启动应用：
+```bash
+python app.py
+```
+
+2. 访问浏览器：
+```
+http://localhost:7860
+```
+
+**开发模式**（启用调试）：
+```bash
+export FLASK_DEBUG=true
+python app.py
+```
+
+⚠️ **安全提示**: 生产环境中请勿启用 DEBUG 模式！
+
+### 方式二：Gradio 应用
+
+1. 安装 Gradio：
+```bash
+pip install gradio
+```
+
+2. 启动应用：
+```bash
+python gradio_app.py
+```
+
+3. 访问浏览器：
+```
+http://localhost:7860
+```
+
+## 使用说明
+
+1. **发送消息**: 在输入框中输入问题，点击"发送"或按 Enter 键
+2. **查看思维链**: 点击"思维链"折叠面板查看模型推理过程
+3. **查看建议**: 点击"下一步建议"查看智能推荐的后续行动
+4. **清空对话**: 点击"清空对话"按钮重置会话
+
+## API 接口说明
+
+### POST /api/chat
+
+发送聊天消息并接收流式响应。
+
+**请求体：**
+```json
+{
+  "message": "用户问题",
+  "history": [
+    {"role": "user", "content": "之前的问题"},
+    {"role": "assistant", "content": "之前的回答"}
+  ]
+}
+```
+
+**响应：** Server-Sent Events (SSE) 流
+
+```
+data: {"type": "update", "content": "...", "reasoning": "...", "has_reasoning": true}
+data: {"type": "complete", "content": "...", "reasoning": "...", "next_actions": ["..."]}
+data: {"type": "error", "error": "错误信息"}
+```
+
+## 技术栈
+
+### Web 应用
+- **后端**: Flask 3.0.0
+- **前端**: 原生 HTML/CSS/JavaScript
+- **通信**: Server-Sent Events (SSE)
+- **样式**: 响应式设计、渐变配色
+
+### Gradio 应用
+- **框架**: Gradio
+- **Python**: requests
+
+## 开发指南
+
+### 自定义样式
+
+编辑 `web/static/css/style.css` 修改界面样式。
+
+### 修改功能
+
+- **后端逻辑**: `web/app.py`
+- **前端交互**: `web/static/js/app.js`
+- **页面结构**: `web/templates/index.html`
+
+### 添加功能
+
+1. 修改 `build_next_actions()` 函数自定义建议内容
+2. 在前端 JavaScript 中添加新的事件处理
+3. 更新 CSS 样式以适配新功能
+
+## 故障排除
+
+### 连接错误
+
+- 确保后端 API 服务正在运行
+- 检查 `API_URL` 配置是否正确
+- 验证防火墙和网络设置
+
+### 样式问题
+
+- 清除浏览器缓存
+- 检查静态文件路径是否正确
+- 查看浏览器控制台错误信息
 
 ## License
 
-This project is licensed under the MIT License.
+MIT License
+
+## 贡献
+
+欢迎提交 Issue 和 Pull Request！

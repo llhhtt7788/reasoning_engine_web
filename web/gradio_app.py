@@ -1,4 +1,3 @@
-# web/gradio_app.py
 import json
 import gradio as gr
 import requests
@@ -7,6 +6,7 @@ API_URL = "http://localhost:11211/api/v1/chat/context"
 
 
 # ================= 工具函数 =================
+
 def _parse_line_to_json(raw_line: str):
     if not raw_line:
         return None
@@ -184,8 +184,4 @@ with gr.Blocks(title="医学 / 决策推理助手") as demo:
 
 
 if __name__ == "__main__":
-    demo.launch(
-        server_name="0.0.0.0",
-        server_port=7860,
-        share=False
-    )
+    demo.launch(server_name="localhost", server_port=7860)

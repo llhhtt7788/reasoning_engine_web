@@ -24,9 +24,8 @@ wheels/
 venv/
 ENV/
 env/
-.venv
 
-# IDEs
+# IDE
 .vscode/
 .idea/
 *.swp
@@ -37,5 +36,9 @@ env/
 .DS_Store
 Thumbs.db
 
-# Gradio
-flagged/
+# Flask
+instance/
+.webassets-cache
+
+# Logs
+*.log
