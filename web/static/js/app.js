@@ -112,7 +112,8 @@ async function sendMessage() {
             },
             body: JSON.stringify({
                 message: message,
-                history: chatHistory.slice(0, -1) // Exclude the just-added user message
+                // Send history excluding the just-added user message, as we send it separately
+                history: chatHistory.slice(0, -1)
             })
         });
         
@@ -133,9 +134,10 @@ async function sendMessage() {
             
             for (const line of lines) {
                 if (line.startsWith('data: ')) {
-                    const data = JSON.parse(line.substring(6));
-                    
-                    if (data.type === 'update') {
+                    try {
+                        const data = JSON.parse(line.substring(6));
+                        
+                        if (data.type === 'update') {
                         answerBuffer = data.content;
                         reasoningBuffer = data.reasoning;
                         hasReasoning = data.has_reasoning;
@@ -161,6 +163,9 @@ async function sendMessage() {
                     } else if (data.type === 'error') {
                         updateAssistantMessage(assistantContent, data.error);
                         answerBuffer = data.error;
+                    }
+                    } catch (e) {
+                        console.error('Failed to parse SSE data:', e);
                     }
                 }
             }
