@@ -4,20 +4,22 @@ import { ChatMessage } from '@/types/chat';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:11211/api/v1/chat/context';
 
 // Cache environment variables at module level for efficiency
+// Validate and parse llmIndex
+const parsedLlmIndex = process.env.NEXT_PUBLIC_LLM_INDEX ? parseInt(process.env.NEXT_PUBLIC_LLM_INDEX, 10) : undefined;
+const validLlmIndex = parsedLlmIndex !== undefined && !isNaN(parsedLlmIndex) ? parsedLlmIndex : undefined;
+
+if (parsedLlmIndex !== undefined && isNaN(parsedLlmIndex)) {
+  console.warn('NEXT_PUBLIC_LLM_INDEX is not a valid number, ignoring it');
+}
+
 const ENV_CONFIG = {
   systemPrompt: process.env.NEXT_PUBLIC_SYSTEM_PROMPT,
-  llmIndex: process.env.NEXT_PUBLIC_LLM_INDEX ? parseInt(process.env.NEXT_PUBLIC_LLM_INDEX, 10) : undefined,
+  llmIndex: validLlmIndex,
   tenantId: process.env.NEXT_PUBLIC_TENANT_ID,
   userId: process.env.NEXT_PUBLIC_USER_ID,
   appId: process.env.NEXT_PUBLIC_APP_ID,
   threadId: process.env.NEXT_PUBLIC_THREAD_ID,
-};
-
-// Validate llmIndex is a valid number
-if (ENV_CONFIG.llmIndex !== undefined && isNaN(ENV_CONFIG.llmIndex)) {
-  console.warn('NEXT_PUBLIC_LLM_INDEX is not a valid number, ignoring it');
-  ENV_CONFIG.llmIndex = undefined;
-}
+} as const;
 
 export type StreamCallbacks = {
   onContent: (content: string) => void;
@@ -72,8 +74,11 @@ export async function streamChat(
     const messageHistory = history.map(msg => {
       if (msg.role === 'user') {
         return `User: ${msg.content}`;
-      } else {
+      } else if (msg.role === 'assistant') {
         return `Assistant: ${msg.content}`;
+      } else {
+        // Handle any other roles by using the role name directly
+        return `${msg.role}: ${msg.content}`;
       }
     });
 
