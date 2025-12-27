@@ -1,0 +1,9 @@
+### Streaming Chat Completion
+POST http://127.0.0.1:11211/api/v1/chat/context
+Content-Type: application/json
+
+{
+  "system": "你叫小路",
+  "user": "你是？",
+  "stream": true
+}

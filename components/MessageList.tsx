@@ -4,7 +4,6 @@
 import React, { useEffect, useRef } from 'react';
 import { MessageBubble } from './MessageBubble';
 import { ReasoningPanel } from './ReasoningPanel';
-import { NextActionPanel } from './NextActionPanel';
 import { ChatMessage } from '@/types/chat';
 
 type MessageListProps = {
@@ -34,7 +33,6 @@ export const MessageList: React.FC<MessageListProps> = ({ messages }) => {
           {message.role === 'assistant' && (
             <>
               <ReasoningPanel reasoning={message.reasoning} />
-              <NextActionPanel actions={message.nextActions} />
             </>
           )}
         </div>

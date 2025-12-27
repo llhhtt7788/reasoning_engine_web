@@ -63,3 +63,24 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Local development note: avoid CORS by using Next proxy
+
+For local development you can avoid CORS/preflight issues by making the frontend call a relative API path and letting Next.js proxy or the server-side route forward requests to your backend.
+
+1. Create `.env.local` in the project root with:
+
+```
+NEXT_PUBLIC_API_URL=/api/v1/chat/context
+BACKEND_URL=http://127.0.0.1:11211
+```
+
+2. Restart Next dev:
+
+```
+npm run dev
+```
+
+3. The frontend will POST to `/api/v1/chat/context` (same-origin). The server-side route `app/api/v1/chat/context/route.ts` will forward requests to `BACKEND_URL` and transparently proxy the SSE stream back to the client. This avoids changing the backend CORS settings for local development.
+
+(If you prefer to enable CORS on the backend, add FastAPI's `CORSMiddleware` or Express' `cors()` middleware.)
