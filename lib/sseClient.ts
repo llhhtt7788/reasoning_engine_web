@@ -3,6 +3,22 @@ import { ChatMessage } from '@/types/chat';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:11211/api/v1/chat/context';
 
+// Cache environment variables at module level for efficiency
+const ENV_CONFIG = {
+  systemPrompt: process.env.NEXT_PUBLIC_SYSTEM_PROMPT,
+  llmIndex: process.env.NEXT_PUBLIC_LLM_INDEX ? parseInt(process.env.NEXT_PUBLIC_LLM_INDEX, 10) : undefined,
+  tenantId: process.env.NEXT_PUBLIC_TENANT_ID,
+  userId: process.env.NEXT_PUBLIC_USER_ID,
+  appId: process.env.NEXT_PUBLIC_APP_ID,
+  threadId: process.env.NEXT_PUBLIC_THREAD_ID,
+};
+
+// Validate llmIndex is a valid number
+if (ENV_CONFIG.llmIndex !== undefined && isNaN(ENV_CONFIG.llmIndex)) {
+  console.warn('NEXT_PUBLIC_LLM_INDEX is not a valid number, ignoring it');
+  ENV_CONFIG.llmIndex = undefined;
+}
+
 export type StreamCallbacks = {
   onContent: (content: string) => void;
   onReasoning: (reasoning: string) => void;
@@ -68,20 +84,13 @@ export async function streamChat(
       messages: messageHistory,
     };
 
-    // Add optional fields from environment variables if available
-    const systemPrompt = process.env.NEXT_PUBLIC_SYSTEM_PROMPT;
-    const llmIndex = process.env.NEXT_PUBLIC_LLM_INDEX;
-    const tenantId = process.env.NEXT_PUBLIC_TENANT_ID;
-    const userId = process.env.NEXT_PUBLIC_USER_ID;
-    const appId = process.env.NEXT_PUBLIC_APP_ID;
-    const threadId = process.env.NEXT_PUBLIC_THREAD_ID;
-
-    if (systemPrompt) requestBody.system = systemPrompt;
-    if (llmIndex !== undefined) requestBody.llm_index = parseInt(llmIndex, 10);
-    if (tenantId) requestBody.tenant_id = tenantId;
-    if (userId) requestBody.user_id = userId;
-    if (appId) requestBody.app_id = appId;
-    if (threadId) requestBody.thread_id = threadId;
+    // Add optional fields from cached environment configuration
+    if (ENV_CONFIG.systemPrompt) requestBody.system = ENV_CONFIG.systemPrompt;
+    if (ENV_CONFIG.llmIndex !== undefined) requestBody.llm_index = ENV_CONFIG.llmIndex;
+    if (ENV_CONFIG.tenantId) requestBody.tenant_id = ENV_CONFIG.tenantId;
+    if (ENV_CONFIG.userId) requestBody.user_id = ENV_CONFIG.userId;
+    if (ENV_CONFIG.appId) requestBody.app_id = ENV_CONFIG.appId;
+    if (ENV_CONFIG.threadId) requestBody.thread_id = ENV_CONFIG.threadId;
 
     const response = await fetch(API_URL, {
       method: 'POST',
