@@ -51,17 +51,45 @@ export async function streamChat(
   const { onContent, onReasoning, onError, onComplete } = callbacks;
 
   try {
+    // Convert chat history to the format expected by the API
+    // The API expects an array of message strings in a conversational format
+    const messageHistory = history.map(msg => {
+      if (msg.role === 'user') {
+        return `User: ${msg.content}`;
+      } else {
+        return `Assistant: ${msg.content}`;
+      }
+    });
+
+    // Build request body matching OpenAPI specification
+    const requestBody: Record<string, unknown> = {
+      user: message,
+      stream: true,
+      messages: messageHistory,
+    };
+
+    // Add optional fields from environment variables if available
+    const systemPrompt = process.env.NEXT_PUBLIC_SYSTEM_PROMPT;
+    const llmIndex = process.env.NEXT_PUBLIC_LLM_INDEX;
+    const tenantId = process.env.NEXT_PUBLIC_TENANT_ID;
+    const userId = process.env.NEXT_PUBLIC_USER_ID;
+    const appId = process.env.NEXT_PUBLIC_APP_ID;
+    const threadId = process.env.NEXT_PUBLIC_THREAD_ID;
+
+    if (systemPrompt) requestBody.system = systemPrompt;
+    if (llmIndex !== undefined) requestBody.llm_index = parseInt(llmIndex, 10);
+    if (tenantId) requestBody.tenant_id = tenantId;
+    if (userId) requestBody.user_id = userId;
+    if (appId) requestBody.app_id = appId;
+    if (threadId) requestBody.thread_id = threadId;
+
     const response = await fetch(API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
       },
-      body: JSON.stringify({
-        user: message,
-        stream: true,
-        messages: history,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
