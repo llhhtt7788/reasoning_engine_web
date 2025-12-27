@@ -3,6 +3,24 @@ import { ChatMessage } from '@/types/chat';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:11211/api/v1/chat/context';
 
+// Cache environment variables at module level for efficiency
+// Validate and parse llmIndex
+const parsedLlmIndex = process.env.NEXT_PUBLIC_LLM_INDEX ? parseInt(process.env.NEXT_PUBLIC_LLM_INDEX, 10) : undefined;
+const validLlmIndex = parsedLlmIndex !== undefined && !isNaN(parsedLlmIndex) ? parsedLlmIndex : undefined;
+
+if (parsedLlmIndex !== undefined && isNaN(parsedLlmIndex)) {
+  console.warn('NEXT_PUBLIC_LLM_INDEX is not a valid number, ignoring it');
+}
+
+const ENV_CONFIG = {
+  systemPrompt: process.env.NEXT_PUBLIC_SYSTEM_PROMPT,
+  llmIndex: validLlmIndex,
+  tenantId: process.env.NEXT_PUBLIC_TENANT_ID,
+  userId: process.env.NEXT_PUBLIC_USER_ID,
+  appId: process.env.NEXT_PUBLIC_APP_ID,
+  threadId: process.env.NEXT_PUBLIC_THREAD_ID,
+} as const;
+
 export type StreamCallbacks = {
   onContent: (content: string) => void;
   onReasoning: (reasoning: string) => void;
@@ -51,17 +69,41 @@ export async function streamChat(
   const { onContent, onReasoning, onError, onComplete } = callbacks;
 
   try {
+    // Convert chat history to the format expected by the API
+    // The API expects an array of message strings in a conversational format
+    const messageHistory = history.map(msg => {
+      if (msg.role === 'user') {
+        return `User: ${msg.content}`;
+      } else if (msg.role === 'assistant') {
+        return `Assistant: ${msg.content}`;
+      } else {
+        // Handle any other roles by using the role name directly
+        return `${msg.role}: ${msg.content}`;
+      }
+    });
+
+    // Build request body matching OpenAPI specification
+    const requestBody: Record<string, unknown> = {
+      user: message,
+      stream: true,
+      messages: messageHistory,
+    };
+
+    // Add optional fields from cached environment configuration
+    if (ENV_CONFIG.systemPrompt) requestBody.system = ENV_CONFIG.systemPrompt;
+    if (ENV_CONFIG.llmIndex !== undefined) requestBody.llm_index = ENV_CONFIG.llmIndex;
+    if (ENV_CONFIG.tenantId) requestBody.tenant_id = ENV_CONFIG.tenantId;
+    if (ENV_CONFIG.userId) requestBody.user_id = ENV_CONFIG.userId;
+    if (ENV_CONFIG.appId) requestBody.app_id = ENV_CONFIG.appId;
+    if (ENV_CONFIG.threadId) requestBody.thread_id = ENV_CONFIG.threadId;
+
     const response = await fetch(API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
       },
-      body: JSON.stringify({
-        user: message,
-        stream: true,
-        messages: history,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {

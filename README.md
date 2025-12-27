@@ -2,7 +2,36 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
-First, run the development server:
+First, install dependencies:
+
+```bash
+npm install
+```
+
+### Configuration
+
+Create a `.env.local` file based on `.env.example`:
+
+```bash
+cp .env.example .env.local
+```
+
+Edit `.env.local` to configure your API endpoint:
+
+```env
+# Required: API endpoint
+NEXT_PUBLIC_API_URL=http://localhost:11211/api/v1/chat/context
+
+# Optional: Additional API parameters
+# NEXT_PUBLIC_SYSTEM_PROMPT=你是一个有用的AI助手
+# NEXT_PUBLIC_LLM_INDEX=0
+# NEXT_PUBLIC_TENANT_ID=your-tenant-id
+# NEXT_PUBLIC_USER_ID=your-user-id
+# NEXT_PUBLIC_APP_ID=your-app-id
+# NEXT_PUBLIC_THREAD_ID=your-thread-id
+```
+
+### Run the development server
 
 ```bash
 npm run dev
