@@ -1,8 +1,9 @@
 // lib/sseClient.ts
 import { ChatMessage } from '@/types/chat';
 
-// Prefer a relative path so Next.js dev server proxy / server-side route handles forwarding to backend
-const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api/v1/chat/context';
+const API_URL = typeof window !== 'undefined'
+  ? '/api/proxy'
+  : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:11211/api/v1/chat/context');
 
 // Cache environment variables at module level for efficiency
 // Validate and parse llmIndex
@@ -70,37 +71,28 @@ export async function streamChat(
   const { onContent, onReasoning, onError, onComplete } = callbacks;
 
   try {
-    // Convert chat history to the format expected by the API (if needed)
+    // Convert chat history to the format expected by the API
+    // The API expects an array of message strings in a conversational format
     const messageHistory = history.map(msg => {
       if (msg.role === 'user') {
         return `User: ${msg.content}`;
       } else if (msg.role === 'assistant') {
         return `Assistant: ${msg.content}`;
       } else {
+        // Handle any other roles by using the role name directly
         return `${msg.role}: ${msg.content}`;
       }
     });
 
-    // Build request body to match the provided API example:
-    // {
-    //   "system": "...",
-    //   "user": "...",
-    //   "stream": true
-    // }
+    // Build request body matching OpenAPI specification
     const requestBody: Record<string, unknown> = {
       user: message,
       stream: true,
+      messages: messageHistory,
     };
 
-    // Include system prompt if available
+    // Add optional fields from cached environment configuration
     if (ENV_CONFIG.systemPrompt) requestBody.system = ENV_CONFIG.systemPrompt;
-
-    // Include history if present — some backends accept `messages` in addition to `system`/`user`
-    if (messageHistory.length > 0) {
-      requestBody.messages = messageHistory;
-    }
-
-    // Preserve optional fields used by some backends
     if (ENV_CONFIG.llmIndex !== undefined) requestBody.llm_index = ENV_CONFIG.llmIndex;
     if (ENV_CONFIG.tenantId) requestBody.tenant_id = ENV_CONFIG.tenantId;
     if (ENV_CONFIG.userId) requestBody.user_id = ENV_CONFIG.userId;
@@ -117,19 +109,14 @@ export async function streamChat(
     });
 
     if (!response.ok) {
-      // Try to read response body for more details
-      let bodyText = '';
-      try {
-        bodyText = await response.text();
-      } catch (e) {
-        bodyText = '<unable to read response body>';
-      }
-      throw new Error(`API error: ${response.status} ${response.statusText} - ${bodyText}`);
+      onError(new Error(`API error: ${response.status}`));
+      return;
     }
 
     const reader = response.body?.getReader();
     if (!reader) {
-      throw new Error('No response body');
+      onError(new Error('No response body'));
+      return;
     }
 
     const decoder = new TextDecoder();
