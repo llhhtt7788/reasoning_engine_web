@@ -7,16 +7,8 @@ import { MessageList } from './MessageList';
 import { InputBar } from './InputBar';
 import { streamChat } from '@/lib/sseClient';
 
-const buildNextActions = (): string[] => {
-  return [
-    '是否需要将当前结论转化为一个 POC 验证方案？',
-    '是否需要进一步量化成本或风险？',
-    '是否要整理为一页决策备忘录？',
-  ];
-};
-
 export const ChatContainer: React.FC = () => {
-  const { messages, isStreaming, addMessage, updateLastAssistant, setNextActions, setStreaming, clearMessages } =
+  const { messages, isStreaming, addMessage, updateLastAssistant, setStreaming, clearMessages } =
     useChatStore();
 
   const handleSend = async (message: string) => {
@@ -61,9 +53,6 @@ export const ChatContainer: React.FC = () => {
           setStreaming(false);
         },
         onComplete: () => {
-          // Generate next actions
-          const actions = buildNextActions();
-          setNextActions(actions);
           setStreaming(false);
         },
       }

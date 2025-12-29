@@ -1,7 +1,9 @@
 // lib/sseClient.ts
 import { ChatMessage } from '@/types/chat';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:11211/api/v1/chat/context';
+const API_URL = typeof window !== 'undefined'
+  ? '/api/proxy'
+  : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:11211/api/v1/chat/context');
 
 // Cache environment variables at module level for efficiency
 // Validate and parse llmIndex
@@ -107,12 +109,14 @@ export async function streamChat(
     });
 
     if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+      onError(new Error(`API error: ${response.status}`));
+      return;
     }
 
     const reader = response.body?.getReader();
     if (!reader) {
-      throw new Error('No response body');
+      onError(new Error('No response body'));
+      return;
     }
 
     const decoder = new TextDecoder();

@@ -7,7 +7,6 @@ type ChatState = {
   isStreaming: boolean;
   addMessage: (msg: ChatMessage) => void;
   updateLastAssistant: (delta: string, reasoning?: string) => void;
-  setNextActions: (actions: string[]) => void;
   clearMessages: () => void;
   setStreaming: (streaming: boolean) => void;
 };
@@ -28,18 +27,6 @@ export const useChatStore = create<ChatState>((set) => ({
           reasoning: reasoning
             ? (messages[lastIndex].reasoning || '') + reasoning
             : messages[lastIndex].reasoning,
-        };
-      }
-      return { messages };
-    }),
-  setNextActions: (actions) =>
-    set((state) => {
-      const messages = [...state.messages];
-      const lastIndex = messages.length - 1;
-      if (lastIndex >= 0 && messages[lastIndex].role === 'assistant') {
-        messages[lastIndex] = {
-          ...messages[lastIndex],
-          nextActions: actions,
         };
       }
       return { messages };
