@@ -13,26 +13,21 @@ export const ReasoningPanel: React.FC<ReasoningPanelProps> = ({ reasoning }) => 
   if (!reasoning) return null;
 
   return (
-    <div className="mt-2 border border-gray-200 rounded-lg overflow-hidden">
+    <div className="mt-2">
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 py-2 bg-gray-50 hover:bg-gray-100 text-left flex items-center justify-between transition-colors"
+        type="button"
+        onClick={() => setIsOpen((v) => !v)}
+        className="inline-flex items-center gap-2 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+        aria-expanded={isOpen}
       >
-        <span className="text-sm font-medium text-gray-700">
-          🧠 思维链（模型思维过程）
-        </span>
-        <span className="text-gray-500 text-sm">
-          {isOpen ? '▲' : '▼'}
-        </span>
+        <span className="font-medium">思维链</span>
+        <span aria-hidden="true">{isOpen ? '▾' : '▸'}</span>
       </button>
-      
+
       {isOpen && (
-        <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
-          <p className="text-xs text-gray-500 mb-2">模型思维过程（仅供参考）</p>
-          <div className="text-sm text-gray-600 whitespace-pre-wrap">
-            {reasoning}
-          </div>
-        </div>
+        <pre className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs leading-relaxed text-gray-700 whitespace-pre-wrap break-words">
+          {reasoning}
+        </pre>
       )}
     </div>
   );

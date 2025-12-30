@@ -1,9 +1,60 @@
-### Streaming Chat Completion
-POST http://127.0.0.1:11211/api/v1/chat/context
+### Streaming Chat Completion (SSE + graph path)
+# NOTE: 8000 = FastAPI dev server (uvicorn). 11211 is used in tests as a dummy LLM port.
+POST http://127.0.0.1:11211/api/v1/chat/context?sse=true&trace_graph=true
 Content-Type: application/json
 
 {
-  "system": "你叫小路",
   "user": "你是？",
+  "stream": true
+}
+
+
+###embeddings
+POST http://172.16.11.35:9925/v1/embeddings
+Content-Type: application/json
+
+{
+  "model": "embed",
+  "input": "你好"
+}
+
+###rerank
+POST http://172.16.11.35:9935/v2/rerank
+Content-Type: application/json
+
+{
+  "model": "rerank",
+  "query": "什么是人工智能？",
+  "documents": [
+    "人工智能是计算机科学的一个分支。",
+    "今天天气很好。",
+    "我喜欢吃苹果。"
+  ]
+}
+
+
+###chat completion
+POST http://172.16.11.35:9903/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "qwen235",
+  "messages": [
+    {"role": "system", "content": "你是一个有帮助的助手。"},
+    {"role": "user", "content": "你好，介绍一下你自己。"}
+  ],
+  "stream": true
+}
+
+###chat completion
+POST http://172.16.11.35:9902/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "qwen",
+  "messages": [
+    {"role": "system", "content": "你是一个有帮助的助手。"},
+    {"role": "user", "content": "你好，介绍一下你自己。"}
+  ],
   "stream": true
 }

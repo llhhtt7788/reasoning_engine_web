@@ -1,6 +1,6 @@
 // components/MessageBubble.tsx
-import React from 'react';
-import ReactMarkdown from 'react-markdown';
+import React, { useMemo } from 'react';
+import { renderMessageToHtml } from '@/lib/latex';
 
 type MessageBubbleProps = {
   role: 'user' | 'assistant';
@@ -9,6 +9,11 @@ type MessageBubbleProps = {
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({ role, content }) => {
   const isUser = role === 'user';
+
+  const renderedHtml = useMemo(() => {
+    if (isUser) return '';
+    return renderMessageToHtml(content);
+  }, [content, isUser]);
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
@@ -22,9 +27,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ role, content }) =
         {isUser ? (
           <div className="whitespace-pre-wrap">{content}</div>
         ) : (
-          <div className="prose prose-sm max-w-none dark:prose-invert">
-            <ReactMarkdown>{content}</ReactMarkdown>
-          </div>
+          <div className="prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: renderedHtml }} />
         )}
       </div>
     </div>
