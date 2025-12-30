@@ -6,10 +6,20 @@ import { useChatStore } from '@/store/chatStore';
 import { MessageList } from './MessageList';
 import { InputBar } from './InputBar';
 import { streamChat } from '@/lib/sseClient';
+import { DecisionPathSidebar } from './DecisionPathSidebar';
+import { ReasoningSidebar } from './ReasoningSidebar';
 
 export const ChatContainer: React.FC = () => {
-    const { messages, isStreaming, addMessage, updateLastAssistant, setStreaming, clearMessages } =
-        useChatStore();
+    const {
+        messages,
+        isStreaming,
+        addMessage,
+        updateLastAssistant,
+        setStreaming,
+        clearMessages,
+        setLastAssistantRoute,
+        appendLangGraphPathEvent,
+    } = useChatStore();
 
     const handleSend = async (message: string) => {
         // Add user message
@@ -24,6 +34,12 @@ export const ChatContainer: React.FC = () => {
             message,
             messages,
             {
+                onRoute: (route) => {
+                    setLastAssistantRoute(route);
+                },
+                onLangGraphPath: (evt) => {
+                    appendLangGraphPathEvent(evt);
+                },
                 onContent: (content) => {
                     updateLastAssistant(content);
                 },
@@ -48,27 +64,40 @@ export const ChatContainer: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col h-screen max-w-5xl mx-auto">
+        <div className="h-screen w-full">
             {/* Header */}
-            <header className="border-b border-gray-200 bg-white px-4 py-4">
+            <header className="border-b border-gray-200 bg-white/70 backdrop-blur px-4 py-4">
                 <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-bold text-gray-900">Med-Go 推理工作台</h1>
+                    <h1 className="text-2xl font-bold text-gray-950 tracking-tight">Med-Go 推理工作台</h1>
                     <button
                         onClick={handleClear}
                         disabled={messages.length === 0 || isStreaming}
-                        className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="px-4 py-2 text-sm border border-gray-300 rounded-xl hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                         清空对话
                     </button>
                 </div>
-                <p className="text-sm text-gray-500 mt-1">推理驱动的专业对话工作台</p>
+                <p className="text-sm text-gray-600 mt-1">AI 驾驶舱：左侧决策路径 · 中间问答 · 右侧思维链</p>
             </header>
 
-            {/* Message List */}
-            <MessageList messages={messages} />
+            {/* 3-column cockpit */}
+            <div className="h-[calc(100vh-73px)] grid grid-cols-12">
+                {/* Left: Decision Path */}
+                <div className="col-span-3 min-w-0">
+                    <DecisionPathSidebar />
+                </div>
 
-            {/* Input Bar */}
-            <InputBar onSend={handleSend} disabled={isStreaming} />
+                {/* Center: Q&A */}
+                <div className="col-span-6 min-w-0 flex flex-col">
+                    <MessageList messages={messages} showMetaPanels={false} />
+                    <InputBar onSend={handleSend} disabled={isStreaming} />
+                </div>
+
+                {/* Right: Reasoning */}
+                <div className="col-span-3 min-w-0">
+                    <ReasoningSidebar />
+                </div>
+            </div>
         </div>
     );
 };

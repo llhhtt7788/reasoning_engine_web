@@ -1,5 +1,5 @@
 // lib/sseClient.ts
-import { ChatMessage } from '@/types/chat';
+import { ChatMessage, ChatRouteEvent, LangGraphPathEvent } from '@/types/chat';
 
 const API_URL = typeof window !== 'undefined'
   ? '/api/proxy'
@@ -26,6 +26,9 @@ const ENV_CONFIG = {
 export type StreamCallbacks = {
   onContent: (content: string) => void;
   onReasoning: (reasoning: string) => void;
+  onRoute?: (route: ChatRouteEvent) => void;
+  onAgent?: (agent: { event?: 'agent'; agent?: string; llm_index?: number; [k: string]: unknown }) => void;
+  onLangGraphPath?: (evt: LangGraphPathEvent) => void;
   onError: (error: Error) => void;
   onComplete: () => void;
 };
@@ -38,29 +41,53 @@ interface SSEDelta {
 
 interface SSEChoice {
   delta?: SSEDelta;
+  finish_reason?: string;
 }
 
 interface SSEData {
+  event?: string;
   choices?: SSEChoice[];
+  [k: string]: unknown;
 }
 
-function parseSSELine(line: string): SSEData | null {
-  if (!line) return null;
-  
-  let data = line.trim();
-  if (!data) return null;
-  
-  if (data.startsWith('data:')) {
-    data = data.slice(5).trim();
-  }
-  
-  if (data === '[DONE]') return null;
-  
+type SSEFrame = {
+  event?: string;
+  data?: string;
+};
+
+function safeParseJson<T>(s: string): T | null {
   try {
-    return JSON.parse(data) as SSEData;
+    return JSON.parse(s) as T;
   } catch {
     return null;
   }
+}
+
+function parseSSEFrame(frameText: string): SSEFrame | null {
+  const raw = frameText.trim();
+  if (!raw) return null;
+
+  const lines = raw.split('\n');
+  let eventName: string | undefined;
+  const dataLines: string[] = [];
+
+  for (const ln of lines) {
+    const line = ln.trim();
+    if (!line) continue;
+    if (line.startsWith('event:')) {
+      eventName = line.slice('event:'.length).trim();
+      continue;
+    }
+    if (line.startsWith('data:')) {
+      dataLines.push(line.slice('data:'.length).trim());
+      continue;
+    }
+  }
+
+  const data = dataLines.join('\n');
+  if (!data) return null;
+  if (data === '[DONE]') return { event: eventName, data };
+  return { event: eventName, data };
 }
 
 export async function streamChat(
@@ -68,20 +95,17 @@ export async function streamChat(
   history: ChatMessage[],
   callbacks: StreamCallbacks
 ): Promise<void> {
-  const { onContent, onReasoning, onError, onComplete } = callbacks;
+  const { onContent, onReasoning, onRoute, onAgent, onLangGraphPath, onError, onComplete } = callbacks;
 
   try {
     // Convert chat history to the format expected by the API
     // The API expects an array of message strings in a conversational format
-    const messageHistory = history.map(msg => {
+    const messageHistory = history.map((msg) => {
       if (msg.role === 'user') {
         return `User: ${msg.content}`;
-      } else if (msg.role === 'assistant') {
-        return `Assistant: ${msg.content}`;
-      } else {
-        // Handle any other roles by using the role name directly
-        return `${msg.role}: ${msg.content}`;
       }
+      // assistant
+      return `Assistant: ${msg.content}`;
     });
 
     // Build request body matching OpenAPI specification
@@ -99,7 +123,11 @@ export async function streamChat(
     if (ENV_CONFIG.appId) requestBody.app_id = ENV_CONFIG.appId;
     if (ENV_CONFIG.threadId) requestBody.thread_id = ENV_CONFIG.threadId;
 
-    const response = await fetch(API_URL, {
+    // Force SSE and graph tracing on (MVP). If you later want to make it configurable,
+    // thread a flag from UI.
+    const url = `${API_URL}?sse=true&trace_graph=true`;
+
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -127,14 +155,44 @@ export async function streamChat(
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
 
-      for (const line of lines) {
-        const data = parseSSELine(line);
-        if (!data) continue;
+      // SSE frames are separated by a blank line
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop() || '';
 
-        const delta = data.choices?.[0]?.delta;
+      for (const part of parts) {
+        const frame = parseSSEFrame(part);
+        if (!frame?.data) continue;
+
+        if (frame.data === '[DONE]') {
+          // ignore here; onComplete triggers after stream ends
+          continue;
+        }
+
+        const obj = safeParseJson<SSEData>(frame.data);
+        if (!obj) continue;
+
+        // 1) route frame (usually first)
+        if (obj.event === 'route' && onRoute) {
+          onRoute(obj as unknown as ChatRouteEvent);
+          continue;
+        }
+
+        // 1.5) agent frame (optional)
+        if (obj.event === 'agent' && onAgent) {
+          onAgent(obj as unknown as { event?: 'agent'; agent?: string; llm_index?: number; [k: string]: unknown });
+          continue;
+        }
+
+        // 2) langgraph path frame (SSE event channel or payload.event)
+        const eventName = frame.event;
+        if ((eventName === 'langgraph_path' || obj.event === 'langgraph_path') && onLangGraphPath) {
+          onLangGraphPath(obj as unknown as LangGraphPathEvent);
+          continue;
+        }
+
+        // 3) delta content
+        const delta = obj.choices?.[0]?.delta;
         if (!delta) continue;
 
         const content = delta.content || '';

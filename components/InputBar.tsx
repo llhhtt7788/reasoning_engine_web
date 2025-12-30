@@ -27,7 +27,7 @@ export const InputBar: React.FC<InputBarProps> = ({ onSend, disabled }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="border-t border-gray-200 bg-white p-4">
+    <form onSubmit={handleSubmit} className="border-t border-gray-200 bg-white/70 backdrop-blur p-4">
       <div className="flex gap-2">
         <textarea
           value={input}
@@ -36,18 +36,18 @@ export const InputBar: React.FC<InputBarProps> = ({ onSend, disabled }) => {
           placeholder="请输入你的问题..."
           disabled={disabled}
           rows={2}
-          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+          className="flex-1 px-4 py-2 border border-gray-300 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-gray-900/40 focus:border-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed bg-white/80"
         />
         <button
           type="submit"
           disabled={!input.trim() || disabled}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium"
+          className="px-6 py-2 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-800 text-gray-50 rounded-xl hover:from-black hover:via-gray-900 hover:to-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium border border-gray-800"
         >
           发送
         </button>
       </div>
       {disabled && (
-        <p className="text-xs text-gray-500 mt-2">正在处理中...</p>
+        <p className="text-xs text-gray-500 mt-2">正在处理...</p>
       )}
     </form>
   );

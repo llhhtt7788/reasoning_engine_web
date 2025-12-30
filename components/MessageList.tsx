@@ -8,18 +8,38 @@ import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css'; // 确保KaTeX样式加载
 import { ReasoningPanel } from './ReasoningPanel';
-import { ChatMessage } from '@/types/chat';
+import { LangGraphPathPanel } from './LangGraphPathPanel';
+import { ChatMessage, LangGraphPathEvent } from '@/types/chat';
+import { useChatStore } from '@/store/chatStore';
 
 type MessageListProps = {
   messages: ChatMessage[];
+  showMetaPanels?: boolean;
 };
 
-export const MessageList: React.FC<MessageListProps> = ({ messages }) => {
+export const MessageList: React.FC<MessageListProps> = ({ messages, showMetaPanels = true }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const appendLangGraphPathEvent = useChatStore((s) => s.appendLangGraphPathEvent);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const replayByTurnId = async (turnId: string) => {
+    const resp = await fetch(`/api/v1/langgraph/path?turn_id=${encodeURIComponent(turnId)}`);
+    if (!resp.ok) throw new Error(`Replay API error: ${resp.status}`);
+    const json = (await resp.json()) as {
+      events?: Array<Record<string, unknown>>;
+    };
+
+    for (const raw of json.events ?? []) {
+      appendLangGraphPathEvent({
+        ...(raw as unknown as LangGraphPathEvent),
+        event: 'langgraph_path',
+        turn_id: turnId,
+      });
+    }
+  };
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
@@ -36,22 +56,33 @@ export const MessageList: React.FC<MessageListProps> = ({ messages }) => {
 
         return (
           <div key={index} className="space-y-2">
-            {/* 思维链入口放在 assistant 气泡上方，并与气泡对齐 */}
-            {message.role === 'assistant' && (
+            {/* 可选的元面板，位于助手气泡上方 */}
+            {showMetaPanels && message.role === 'assistant' && (
               <div className={[bubbleAlign, 'max-w-[85%]'].join(' ')}>
                 <ReasoningPanel reasoning={message.reasoning} />
+                <LangGraphPathPanel
+                  turnId={message.turn_id}
+                  sessionId={message.session_id}
+                  conversationId={message.conversation_id}
+                  events={message.langgraph_path}
+                  onReplayAction={
+                    message.turn_id ? () => replayByTurnId(message.turn_id as string) : undefined
+                  }
+                />
               </div>
             )}
 
-            {/* 用 ReactMarkdown 实际渲染消息内容（否则 Markdown 永远不会生效） */}
+            {/* 消息内容 */}
             <div
               className={[
-                'max-w-[85%] rounded-lg px-4 py-3 whitespace-normal break-words',
+                // Bubble should hug content; cap width on long messages
+                'w-fit max-w-[85%] rounded-2xl px-4 py-3 whitespace-pre-wrap break-words shadow-sm',
                 bubbleAlign,
-                isUser ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900',
+                isUser
+                  ? 'bg-gradient-to-br from-gray-950 via-gray-900 to-gray-800 text-gray-50 border border-gray-800'
+                  : 'bg-white/80 backdrop-blur border border-gray-200 text-gray-900',
               ].join(' ')}
             >
-              {/* react-markdown 新版本已移除 className 透传；样式请包在外层容器 */}
               <div
                 className={[
                   'prose prose-sm max-w-none',
@@ -64,6 +95,10 @@ export const MessageList: React.FC<MessageListProps> = ({ messages }) => {
                   components={{
                     // 避免 p 默认 margin 造成气泡内间距怪异
                     p: ({ children }) => <p className="m-0">{children}</p>,
+                    // Avoid block code/inline elements forcing full width
+                    pre: ({ children }) => (
+                      <pre className="m-0 whitespace-pre-wrap break-words">{children}</pre>
+                    ),
                   }}
                 >
                   {message.content || ''}
