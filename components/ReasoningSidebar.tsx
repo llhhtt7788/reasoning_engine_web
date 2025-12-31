@@ -26,13 +26,13 @@ export const ReasoningSidebar: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-hidden p-4">
         {current?.reasoning ? (
-          <pre className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs leading-relaxed text-gray-700 whitespace-pre-wrap wrap-break-word">
+          <pre className="h-full rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs leading-relaxed text-gray-700 whitespace-pre-wrap break-words overflow-y-auto">
             {current.reasoning}
           </pre>
         ) : (
-          <div className="text-sm text-gray-500">
+          <div className="h-full rounded-lg border border-dashed border-gray-200 bg-gray-50/70 p-3 text-sm text-gray-500 overflow-y-auto">
             当前轮没有返回思维链字段（reasoning / reasoning_content）。
           </div>
         )}
