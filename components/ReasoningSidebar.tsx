@@ -20,7 +20,7 @@ export const ReasoningSidebar: React.FC = () => {
   return (
     <aside className="h-full border-l border-gray-200 bg-white flex flex-col">
       <div className="px-4 py-3 border-b border-gray-200">
-        <div className="text-sm font-semibold text-gray-900">思维链</div>
+        <div className="text-sm font-semibold text-gray-900">思路</div>
         <div className="text-xs text-gray-500 mt-1">
           当前 turn：{current?.turn_id ? <span className="font-mono break-all">{current.turn_id}</span> : '—'}
         </div>
@@ -33,7 +33,8 @@ export const ReasoningSidebar: React.FC = () => {
           </pre>
         ) : (
           <div className="h-full rounded-lg border border-dashed border-gray-200 bg-gray-50/70 p-3 text-sm text-gray-500 overflow-y-auto">
-            当前轮没有返回思维链字段（reasoning / reasoning_content）。
+            <p className="text-center mt-20">暂无思路内容</p>
+            <p className="text-center mt-2">AI 助手将在此处展示其推理过程</p>
           </div>
         )}
       </div>
