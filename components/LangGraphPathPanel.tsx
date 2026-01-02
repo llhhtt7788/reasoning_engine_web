@@ -101,7 +101,7 @@ export const LangGraphPathPanel: React.FC<LangGraphPathPanelProps> = ({
           </div>
 
           <div className="text-[11px] text-gray-500">
-            DAG(MVP)：仅使用 edge=="on_chain_start" 的事件构建路径
+            DAG(MVP)：仅使用 edge==&quot;on_chain_start&quot; 的事件构建路径
             {dag.nodes.length > 0 ? `（nodes:${dag.nodes.length}, edges:${dag.edges.length}）` : ''}
           </div>
 

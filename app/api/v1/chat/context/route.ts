@@ -40,7 +40,7 @@ export async function POST(req: Request) {
   const url = `${BACKEND_BASE}/api/v1/chat/context`;
 
   // Build forwarded headers by copying most of the incoming headers
-  const forwardedHeaders = stripHopByHopHeaders(new Headers(req.headers as any));
+  const forwardedHeaders = stripHopByHopHeaders(new Headers(req.headers));
 
   // Ensure Content-Type is set if provided by client
   const contentType = req.headers.get('content-type');
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
     let text = '';
     try {
       text = await backendResponse.text();
-    } catch (e) {
+    } catch {
       text = '<unable to read backend error body>';
     }
     return new Response(text, {

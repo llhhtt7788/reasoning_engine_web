@@ -31,7 +31,7 @@ export type ObservabilitySnapshot = {
   agent?: string;
   llm_index?: number;
   model?: string;
-  memory_selected?: number;
+  memory_selected?: number | unknown[];
   context_tokens?: ContextTokensBreakdown;
   tokens_used?: number;
   backend_summary?: string;

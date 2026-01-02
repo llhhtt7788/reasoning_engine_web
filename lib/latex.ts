@@ -2,11 +2,11 @@
 // Utilities to render messages containing LaTeX math (inline $...$ and display $$...$$)
 // Uses KaTeX to render math and isomorphic-dompurify to sanitize final HTML.
 
-/* eslint-disable @typescript-eslint/no-var-requires */
-const katex: any = require('katex');
-const createDOMPurify: any = require('isomorphic-dompurify');
+import katex from 'katex';
+import createDOMPurify from 'isomorphic-dompurify';
 
-const DOMPurify = createDOMPurify(typeof window !== 'undefined' ? window : (globalThis as any));
+const windowLike: Window | typeof globalThis = typeof window !== 'undefined' ? window : globalThis;
+const DOMPurify = createDOMPurify(windowLike);
 
 function escapeHtml(text: string) {
   return text
@@ -24,7 +24,7 @@ export function renderMessageToHtml(input: string): string {
 
   // Protect escaped dollar signs
   const ESC_DOLLAR = '___ESC_DOLLAR___';
-  let working = input.replace(/\\\$/g, ESC_DOLLAR); // replace literal \$ with placeholder
+  const working = input.replace(/\\\$/g, ESC_DOLLAR); // replace literal \$ with placeholder
 
   const parts: string[] = [];
   const regex = /(\$\$([\s\S]*?)\$\$)|\$([^$\n]+?)\$/g; // match $$...$$ first, then $...$
@@ -43,7 +43,7 @@ export function renderMessageToHtml(input: string): string {
       try {
         const rendered = katex.renderToString(tex, { throwOnError: false, displayMode: true });
         parts.push(rendered);
-      } catch (e) {
+      } catch {
         parts.push(escapeHtml(m[0]));
       }
     } else {
@@ -51,7 +51,7 @@ export function renderMessageToHtml(input: string): string {
       try {
         const rendered = katex.renderToString(tex, { throwOnError: false, displayMode: false });
         parts.push(rendered);
-      } catch (e) {
+      } catch {
         parts.push(escapeHtml(m[0]));
       }
     }

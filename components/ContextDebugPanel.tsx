@@ -53,6 +53,10 @@ export const ContextDebugPanel: React.FC<ContextDebugPanelProps> = ({
   const isAgentHighlighted = highlightAgent && snapshot?.agent && highlightAgent === snapshot.agent;
   const shouldHighlightContext = Boolean(highlightNodeName);
 
+  const memorySelectedValue = Array.isArray(snapshot?.memory_selected)
+    ? snapshot?.memory_selected.length
+    : snapshot?.memory_selected;
+
   return (
     <section className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 space-y-3">
       <div>
@@ -85,11 +89,7 @@ export const ContextDebugPanel: React.FC<ContextDebugPanelProps> = ({
         <SectionLabel title="上下文" />
         <FieldRow
           label="memory_selected"
-          value={
-            Array.isArray(snapshot?.memory_selected as any)
-              ? (snapshot?.memory_selected as any).length
-              : snapshot?.memory_selected
-          }
+          value={memorySelectedValue}
           highlight={shouldHighlightContext}
         />
         <FieldRow label="tokens_used" value={tokensTotal} highlight={shouldHighlightContext} />
