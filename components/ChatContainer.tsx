@@ -31,6 +31,8 @@ export const ChatContainer: React.FC = () => {
 
     const [conversationId, setConversationId] = useState<string | undefined>(() => getOrInitConversationId());
     const [sessionId, setSessionId] = useState<string | null>(() => getReusableSessionId(SESSION_TTL_MS));
+    const [decisionPathEnabled, setDecisionPathEnabled] = useState(false);
+    const setSelectedDecisionNode = useChatStore((s) => s.setSelectedDecisionNode);
 
     const handleSend = async (message: string) => {
         const ensuredConversationId = conversationId ?? getOrInitConversationId();
@@ -131,13 +133,28 @@ export const ChatContainer: React.FC = () => {
             <header className="border-b border-gray-200 bg-white/70 backdrop-blur px-4 py-4">
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-bold text-gray-950 tracking-tight">Med-Go 推理工作台</h1>
-                    <button
-                        onClick={handleClear}
-                        disabled={messages.length === 0 || isStreaming}
-                        className="px-4 py-2 text-sm border border-gray-300 rounded-xl hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                        清空对话
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <label className="flex items-center gap-2 text-sm text-gray-700">
+                            <input
+                                type="checkbox"
+                                className="rounded border-gray-300"
+                                checked={decisionPathEnabled}
+                                onChange={(e) => {
+                                    const enabled = e.target.checked;
+                                    setDecisionPathEnabled(enabled);
+                                    if (!enabled) setSelectedDecisionNode(null);
+                                }}
+                            />
+                            Debug / 决策路径
+                        </label>
+                        <button
+                            onClick={handleClear}
+                            disabled={messages.length === 0 || isStreaming}
+                            className="px-4 py-2 text-sm border border-gray-300 rounded-xl hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            清空对话
+                        </button>
+                    </div>
                 </div>
                 <p className="text-sm text-gray-600 mt-1">AI 驾驶舱：左侧决策路径 · 中间问答 · 右侧思维链</p>
             </header>
@@ -145,12 +162,12 @@ export const ChatContainer: React.FC = () => {
             {/* 3-column cockpit */}
             <div className="h-[calc(100vh-73px)] grid grid-cols-12">
                 {/* Left: Decision Path */}
-                <div className="col-span-3 min-w-0">
-                    <DecisionPathSidebar />
+                <div className={decisionPathEnabled ? 'col-span-3 min-w-0' : 'hidden'}>
+                    {decisionPathEnabled && <DecisionPathSidebar />}
                 </div>
 
                 {/* Center: Q&A */}
-                <div className="col-span-6 min-w-0 flex flex-col">
+                <div className={decisionPathEnabled ? 'col-span-6 min-w-0 flex flex-col' : 'col-span-9 min-w-0 flex flex-col'}>
                     <MessageList messages={messages} showMetaPanels={false} />
                     <InputBar onSend={handleSend} disabled={isStreaming} />
                 </div>

@@ -1,22 +1,12 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useChatStore } from '@/store/chatStore';
-import { LangGraphTreeView } from '@/components/LangGraphTreeView';
-import type { LangGraphPathEvent } from '@/types/chat';
-
-function sortEvents(events: LangGraphPathEvent[]) {
-  return events.slice().sort((a, b) => {
-    const ta = a.ts || (a as any).timestamp;
-    const tb = b.ts || (b as any).timestamp;
-    if (!ta || !tb) return 0;
-    return String(ta).localeCompare(String(tb));
-  });
-}
+import { aggregateNodeRuns } from '@/lib/langgraphRuns';
+import { LangGraphTimeline } from './LangGraphTimeline';
 
 export const DecisionPathSidebar: React.FC = () => {
-  const { messages } = useChatStore();
-  const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  const { messages, selectedDecisionNode, setSelectedDecisionNode } = useChatStore();
 
   const current = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -27,7 +17,7 @@ export const DecisionPathSidebar: React.FC = () => {
     return null;
   }, [messages]);
 
-  const allEvents = useMemo(() => sortEvents(current?.langgraph_path ?? []), [current?.langgraph_path]);
+  const runs = useMemo(() => aggregateNodeRuns(current?.langgraph_path), [current?.langgraph_path]);
 
   return (
     <aside className="h-full border-r border-gray-200 bg-white flex flex-col">
@@ -47,32 +37,22 @@ export const DecisionPathSidebar: React.FC = () => {
           <div className="text-sm text-gray-500">
             暂无路径事件。
           </div>
-        ) : (
-          <>
-            <div className="text-xs text-gray-500">
-              events: {allEvents.length}
-              {selectedNode ? (
-                <>
-                  {' '}· filter: <span className="font-mono">{selectedNode}</span>{' '}
-                  <button
-                    type="button"
-                    className="ml-2 underline"
-                    onClick={() => setSelectedNode(null)}
-                  >
-                    清除
-                  </button>
-                </>
-              ) : null}
-            </div>
-
-            <div className="space-y-3">
-              <LangGraphTreeView
-                events={allEvents}
-                selectedNode={selectedNode}
-                onSelectNodeAction={setSelectedNode}
-              />
-            </div>
-          </>
+          ) : (
+          <LangGraphTimeline
+            runs={runs}
+            selectedRunKey={
+              selectedDecisionNode?.runId && selectedDecisionNode?.node
+                ? `${selectedDecisionNode.runId}-${selectedDecisionNode.node}`
+                : null
+            }
+            onSelectRun={(run) =>
+              setSelectedDecisionNode(
+                run
+                  ? { runId: run.run_id, node: run.node, agent: run.agent ?? undefined }
+                  : null
+              )
+            }
+          />
         )}
       </div>
     </aside>
