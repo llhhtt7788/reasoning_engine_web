@@ -1,13 +1,20 @@
 // components/ChatContainer.tsx
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useChatStore } from '@/store/chatStore';
 import { MessageList } from './MessageList';
 import { InputBar } from './InputBar';
 import { streamChat } from '@/lib/sseClient';
 import { DecisionPathSidebar } from './DecisionPathSidebar';
 import { ReasoningSidebar } from './ReasoningSidebar';
+import {
+    getOrInitConversationId,
+    getReusableSessionId,
+    persistConversationId,
+    persistSessionId,
+    SESSION_TTL_MS,
+} from '@/lib/sessionManager';
 
 export const ChatContainer: React.FC = () => {
     const {
@@ -19,14 +26,24 @@ export const ChatContainer: React.FC = () => {
         clearMessages,
         setLastAssistantRoute,
         appendLangGraphPathEvent,
+        mergeAssistantMeta,
     } = useChatStore();
 
+    const [conversationId, setConversationId] = useState<string | undefined>(() => getOrInitConversationId());
+    const [sessionId, setSessionId] = useState<string | null>(() => getReusableSessionId(SESSION_TTL_MS));
+
     const handleSend = async (message: string) => {
+        const ensuredConversationId = conversationId ?? getOrInitConversationId();
+        setConversationId(ensuredConversationId);
+
+        const reusableSessionId = sessionId ?? getReusableSessionId(SESSION_TTL_MS);
+        setSessionId(reusableSessionId);
+
         // Add user message
-        addMessage({ role: 'user', content: message });
+        addMessage({ role: 'user', content: message, conversation_id: ensuredConversationId });
 
         // Add empty assistant message
-        addMessage({ role: 'assistant', content: '' });
+        addMessage({ role: 'assistant', content: '', conversation_id: ensuredConversationId, session_id: reusableSessionId ?? undefined });
 
         setStreaming(true);
 
@@ -36,15 +53,56 @@ export const ChatContainer: React.FC = () => {
             {
                 onRoute: (route) => {
                     setLastAssistantRoute(route);
+                    mergeAssistantMeta(route);
+                    if (route.session_id) {
+                        persistSessionId(route.session_id);
+                        setSessionId(route.session_id);
+                    }
+                    if (route.conversation_id) {
+                        persistConversationId(route.conversation_id);
+                        setConversationId(route.conversation_id);
+                    }
                 },
                 onLangGraphPath: (evt) => {
                     appendLangGraphPathEvent(evt);
+                    mergeAssistantMeta({
+                        turn_id: evt.turn_id,
+                        session_id: evt.session_id,
+                        conversation_id: evt.conversation_id,
+                    });
+                    if (evt.session_id) {
+                        persistSessionId(evt.session_id);
+                        setSessionId(evt.session_id);
+                    }
+                    if (evt.conversation_id) {
+                        persistConversationId(evt.conversation_id);
+                        setConversationId(evt.conversation_id);
+                    }
                 },
                 onContent: (content) => {
                     updateLastAssistant(content);
                 },
                 onReasoning: (reasoning) => {
                     updateLastAssistant('', reasoning);
+                },
+                onAgent: (agentEvt) => {
+                    if (agentEvt.agent) {
+                        mergeAssistantMeta({
+                            agent: agentEvt.agent,
+                            llm_index: agentEvt.llm_index,
+                        });
+                    }
+                },
+                onObservability: (meta) => {
+                    mergeAssistantMeta(meta);
+                    if (meta.session_id) {
+                        persistSessionId(meta.session_id);
+                        setSessionId(meta.session_id);
+                    }
+                    if (meta.conversation_id) {
+                        persistConversationId(meta.conversation_id);
+                        setConversationId(meta.conversation_id);
+                    }
                 },
                 onError: (error) => {
                     updateLastAssistant(`\n\n请求失败: ${error.message}`);
@@ -53,6 +111,10 @@ export const ChatContainer: React.FC = () => {
                 onComplete: () => {
                     setStreaming(false);
                 },
+            },
+            {
+                conversationId: ensuredConversationId ?? 'unknown_conversation',
+                sessionId: reusableSessionId,
             }
         );
     };

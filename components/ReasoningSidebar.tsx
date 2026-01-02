@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react';
 import { useChatStore } from '@/store/chatStore';
+import { ContextDebugPanel } from './ContextDebugPanel';
 
 export const ReasoningSidebar: React.FC = () => {
   const messages = useChatStore((s) => s.messages);
@@ -26,14 +27,24 @@ export const ReasoningSidebar: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden p-4">
+      <div className="flex-1 overflow-hidden p-4 space-y-3">
+        <ContextDebugPanel
+          turnId={current?.turn_id}
+          sessionId={current?.session_id}
+          conversationId={current?.conversation_id}
+          observability={current?.observability}
+        />
+
         {current?.reasoning ? (
-          <pre className="h-full rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs leading-relaxed text-gray-700 whitespace-pre-wrap break-words overflow-y-auto">
-            {current.reasoning}
-          </pre>
+          <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4">
+            <div className="text-sm font-semibold text-gray-900 mb-2">思路</div>
+            <pre className="max-h-[420px] rounded-lg border border-gray-100 bg-gray-50 p-3 text-xs leading-relaxed text-gray-700 whitespace-pre-wrap break-words overflow-y-auto">
+              {current.reasoning}
+            </pre>
+          </div>
         ) : (
-          <div className="h-full rounded-lg border border-dashed border-gray-200 bg-gray-50/70 p-3 text-sm text-gray-500 overflow-y-auto">
-            <p className="text-center mt-20">暂无思路内容</p>
+          <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/70 p-4 text-sm text-gray-500 overflow-y-auto">
+            <p className="text-center mt-10">暂无思路内容</p>
             <p className="text-center mt-2">AI 助手将在此处展示其推理过程</p>
           </div>
         )}
