@@ -1,5 +1,5 @@
 // lib/sseClient.ts
-import { ChatMessage, ChatRouteEvent, LangGraphPathEvent } from '@/types/chat';
+import { ChatMessage, ChatRouteEvent, LangGraphPathEvent, ObservabilitySnapshot } from '@/types/chat';
 
 const API_URL = typeof window !== 'undefined'
   ? '/api/proxy'
@@ -29,6 +29,7 @@ export type StreamCallbacks = {
   onRoute?: (route: ChatRouteEvent) => void;
   onAgent?: (agent: { event?: 'agent'; agent?: string; llm_index?: number; [k: string]: unknown }) => void;
   onLangGraphPath?: (evt: LangGraphPathEvent) => void;
+  onObservability?: (meta: ObservabilitySnapshot) => void;
   onError: (error: Error) => void;
   onComplete: () => void;
 };
@@ -54,6 +55,59 @@ type SSEFrame = {
   event?: string;
   data?: string;
 };
+
+function extractObservability(payload: SSEData | Record<string, unknown> | null | undefined): ObservabilitySnapshot | null {
+  if (!payload || typeof payload !== 'object') return null;
+
+  const rawTurnMeta = (payload as Record<string, unknown>)['turn_meta'];
+  const turnMeta = typeof rawTurnMeta === 'object' && rawTurnMeta !== null
+    ? (rawTurnMeta as Record<string, unknown>)
+    : undefined;
+  const persona = (payload as Record<string, unknown>)['persona'];
+  const backendField = (payload as Record<string, unknown>)['backend'] as
+    | { summary?: string }
+    | undefined;
+
+  const snapshot: ObservabilitySnapshot = {
+    turn_id: (payload as Record<string, unknown>)['turn_id'] as string | undefined,
+    session_id: (payload as Record<string, unknown>)['session_id'] as string | undefined,
+    conversation_id: (payload as Record<string, unknown>)['conversation_id'] as string | undefined,
+    conversation_root_id: (payload as Record<string, unknown>)['conversation_root_id'] as string | undefined,
+    persona: typeof persona === 'string' ? persona : undefined,
+    task_type:
+      typeof turnMeta?.['task_type'] === 'string'
+        ? (turnMeta['task_type'] as string)
+        : undefined,
+    agent: (payload as Record<string, unknown>)['agent'] as string | undefined,
+    llm_index: typeof (payload as Record<string, unknown>)['llm_index'] === 'number'
+      ? ((payload as Record<string, unknown>)['llm_index'] as number)
+      : undefined,
+    model: (payload as Record<string, unknown>)['model'] as string | undefined,
+    memory_selected: typeof (payload as Record<string, unknown>)['memory_selected'] === 'number'
+      ? ((payload as Record<string, unknown>)['memory_selected'] as number)
+      : undefined,
+    context_tokens: typeof (payload as Record<string, unknown>)['context_tokens'] === 'number'
+      ? ((payload as Record<string, unknown>)['context_tokens'] as number)
+      : undefined,
+    backend_summary:
+      typeof (payload as Record<string, unknown>)['backend_summary'] === 'string'
+        ? ((payload as Record<string, unknown>)['backend_summary'] as string)
+        : typeof backendField?.summary === 'string'
+        ? backendField.summary
+        : undefined,
+    has_session_summary: typeof (payload as Record<string, unknown>)['has_session_summary'] === 'boolean'
+      ? ((payload as Record<string, unknown>)['has_session_summary'] as boolean)
+      : undefined,
+    agent_prompt_preview:
+      typeof (payload as Record<string, unknown>)['agent_prompt_preview'] === 'string'
+        ? ((payload as Record<string, unknown>)['agent_prompt_preview'] as string)
+        : undefined,
+    turn_meta: typeof turnMeta === 'object' && turnMeta !== null ? (turnMeta as Record<string, unknown>) : undefined,
+  };
+
+  const hasValue = Object.values(snapshot).some((v) => v !== undefined);
+  return hasValue ? snapshot : null;
+}
 
 function safeParseJson<T>(s: string): T | null {
   try {
@@ -95,7 +149,7 @@ export async function streamChat(
   history: ChatMessage[],
   callbacks: StreamCallbacks
 ): Promise<void> {
-  const { onContent, onReasoning, onRoute, onAgent, onLangGraphPath, onError, onComplete } = callbacks;
+  const { onContent, onReasoning, onRoute, onAgent, onLangGraphPath, onObservability, onError, onComplete } = callbacks;
 
   try {
     // Convert chat history to the format expected by the API
@@ -175,12 +229,17 @@ export async function streamChat(
         // 1) route frame (usually first)
         if (obj.event === 'route' && onRoute) {
           onRoute(obj as unknown as ChatRouteEvent);
+          const obs = extractObservability(obj);
+          if (obs && onObservability) onObservability(obs);
           continue;
         }
 
         // 1.5) agent frame (optional)
         if (obj.event === 'agent' && onAgent) {
-          onAgent(obj as unknown as { event?: 'agent'; agent?: string; llm_index?: number; [k: string]: unknown });
+          const agentObj = obj as unknown as { event?: 'agent'; agent?: string; llm_index?: number; [k: string]: unknown };
+          onAgent(agentObj);
+          const obs = extractObservability(agentObj);
+          if (obs && onObservability) onObservability(obs);
           continue;
         }
 
@@ -188,6 +247,8 @@ export async function streamChat(
         const eventName = frame.event;
         if ((eventName === 'langgraph_path' || obj.event === 'langgraph_path') && onLangGraphPath) {
           onLangGraphPath(obj as unknown as LangGraphPathEvent);
+          const obs = extractObservability(obj);
+          if (obs && onObservability) onObservability(obs);
           continue;
         }
 

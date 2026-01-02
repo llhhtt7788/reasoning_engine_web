@@ -19,6 +19,7 @@ export const ChatContainer: React.FC = () => {
         clearMessages,
         setLastAssistantRoute,
         appendLangGraphPathEvent,
+        mergeAssistantMeta,
     } = useChatStore();
 
     const handleSend = async (message: string) => {
@@ -36,15 +37,32 @@ export const ChatContainer: React.FC = () => {
             {
                 onRoute: (route) => {
                     setLastAssistantRoute(route);
+                    mergeAssistantMeta(route);
                 },
                 onLangGraphPath: (evt) => {
                     appendLangGraphPathEvent(evt);
+                    mergeAssistantMeta({
+                        turn_id: evt.turn_id,
+                        session_id: evt.session_id,
+                        conversation_id: evt.conversation_id,
+                    });
                 },
                 onContent: (content) => {
                     updateLastAssistant(content);
                 },
                 onReasoning: (reasoning) => {
                     updateLastAssistant('', reasoning);
+                },
+                onAgent: (agentEvt) => {
+                    if (agentEvt.agent) {
+                        mergeAssistantMeta({
+                            agent: agentEvt.agent,
+                            llm_index: agentEvt.llm_index,
+                        });
+                    }
+                },
+                onObservability: (meta) => {
+                    mergeAssistantMeta(meta);
                 },
                 onError: (error) => {
                     updateLastAssistant(`\n\n请求失败: ${error.message}`);
