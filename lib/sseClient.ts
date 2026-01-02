@@ -59,58 +59,116 @@ type SSEFrame = {
 function extractObservability(payload: SSEData | Record<string, unknown> | null | undefined): ObservabilitySnapshot | null {
   if (!payload || typeof payload !== 'object') return null;
 
-  const rawTurnMeta = (payload as Record<string, unknown>)['turn_meta'];
+  const obj = payload as Record<string, unknown>;
+  const meta = typeof obj.meta === 'object' && obj.meta !== null ? (obj.meta as Record<string, unknown>) : undefined;
+  const rawTurnMeta = obj['turn_meta'] ?? meta?.['turn_meta'];
   const turnMeta = typeof rawTurnMeta === 'object' && rawTurnMeta !== null
     ? (rawTurnMeta as Record<string, unknown>)
     : undefined;
-  const persona = (payload as Record<string, unknown>)['persona'];
-  const backendField = (payload as Record<string, unknown>)['backend'] as
-    | { summary?: string }
-    | undefined;
-  const contextBackends = (payload as Record<string, unknown>)['context_backends'];
+  const persona = obj['persona'] ?? meta?.['persona'];
+  const backendField = obj['backend'] as { summary?: string } | undefined;
+  const contextBackends = obj['context_backends'] ?? meta?.['context_backends'];
+
+  const contextDebugFromPayload = obj['context_debug'];
+  const contextDebugFromMeta = meta?.['context_debug'];
+  const hasContextDebug = Object.prototype.hasOwnProperty.call(obj, 'context_debug')
+    || (meta ? Object.prototype.hasOwnProperty.call(meta, 'context_debug') : false);
+  const contextDebug = typeof contextDebugFromPayload === 'object' && contextDebugFromPayload !== null
+    ? (contextDebugFromPayload as Record<string, unknown>)
+    : typeof contextDebugFromMeta === 'object' && contextDebugFromMeta !== null
+      ? (contextDebugFromMeta as Record<string, unknown>)
+      : undefined;
+
+  const taskTypeFromDebug = typeof contextDebug?.['task_type'] === 'string'
+    ? (contextDebug['task_type'] as string)
+    : undefined;
+
+  const memorySelected = (() => {
+    const raw = contextDebug?.['memory_selected'];
+    if (Array.isArray(raw)) return raw.length;
+    if (typeof raw === 'number') return raw;
+    if (typeof obj['memory_selected'] === 'number') return obj['memory_selected'] as number;
+    return undefined;
+  })();
+
+  const contextTokensRaw = (() => {
+    if (contextDebug && typeof contextDebug['context_tokens'] === 'object' && contextDebug['context_tokens'] !== null) {
+      return contextDebug['context_tokens'] as Record<string, unknown>;
+    }
+    if (typeof obj['context_tokens'] === 'object' && obj['context_tokens'] !== null) {
+      return obj['context_tokens'] as Record<string, unknown>;
+    }
+    return undefined;
+  })();
+
+  const contextTokens = contextTokensRaw
+    ? {
+      total: typeof contextTokensRaw['total'] === 'number' ? (contextTokensRaw['total'] as number) : undefined,
+      memories: typeof contextTokensRaw['memories'] === 'number' ? (contextTokensRaw['memories'] as number) : undefined,
+      recent_turns:
+        typeof contextTokensRaw['recent_turns'] === 'number'
+          ? (contextTokensRaw['recent_turns'] as number)
+          : undefined,
+      summary: typeof contextTokensRaw['summary'] === 'number' ? (contextTokensRaw['summary'] as number) : undefined,
+    }
+    : undefined;
 
   const snapshot: ObservabilitySnapshot = {
-    turn_id: (payload as Record<string, unknown>)['turn_id'] as string | undefined,
-    session_id: (payload as Record<string, unknown>)['session_id'] as string | undefined,
-    conversation_id: (payload as Record<string, unknown>)['conversation_id'] as string | undefined,
-    conversation_root_id: (payload as Record<string, unknown>)['conversation_root_id'] as string | undefined,
-    persona: typeof persona === 'string' ? persona : undefined,
-    task_type:
-      typeof turnMeta?.['task_type'] === 'string'
-        ? (turnMeta['task_type'] as string)
+    turn_id: (contextDebug?.['turn_id'] as string | undefined)
+      ?? (meta?.['turn_id'] as string | undefined)
+      ?? (obj['turn_id'] as string | undefined),
+    session_id: (contextDebug?.['session_id'] as string | undefined)
+      ?? (meta?.['session_id'] as string | undefined)
+      ?? (obj['session_id'] as string | undefined),
+    conversation_id: (contextDebug?.['conversation_id'] as string | undefined)
+      ?? (meta?.['conversation_id'] as string | undefined)
+      ?? (obj['conversation_id'] as string | undefined),
+    conversation_root_id: (contextDebug?.['conversation_root_id'] as string | undefined)
+      ?? (obj['conversation_root_id'] as string | undefined),
+    persona: typeof contextDebug?.['persona'] === 'string'
+      ? (contextDebug['persona'] as string)
+      : typeof persona === 'string'
+        ? (persona as string)
         : undefined,
-    agent: (payload as Record<string, unknown>)['agent'] as string | undefined,
-    llm_index: typeof (payload as Record<string, unknown>)['llm_index'] === 'number'
-      ? ((payload as Record<string, unknown>)['llm_index'] as number)
-      : undefined,
-    model: (payload as Record<string, unknown>)['model'] as string | undefined,
-    memory_selected: typeof (payload as Record<string, unknown>)['memory_selected'] === 'number'
-      ? ((payload as Record<string, unknown>)['memory_selected'] as number)
-      : undefined,
-    context_tokens: typeof (payload as Record<string, unknown>)['context_tokens'] === 'number'
-      ? ((payload as Record<string, unknown>)['context_tokens'] as number)
-      : undefined,
+    task_type: taskTypeFromDebug
+      ?? (typeof turnMeta?.['task_type'] === 'string' ? (turnMeta['task_type'] as string) : undefined),
+    agent: typeof contextDebug?.['agent'] === 'string'
+      ? (contextDebug['agent'] as string)
+      : (obj['agent'] as string | undefined),
+    llm_index: typeof contextDebug?.['llm_index'] === 'number'
+      ? (contextDebug['llm_index'] as number)
+      : typeof obj['llm_index'] === 'number'
+        ? (obj['llm_index'] as number)
+        : undefined,
+    model: (obj['model'] as string | undefined),
+    memory_selected: memorySelected,
+    context_tokens: contextTokens,
+    tokens_used: contextTokens?.total
+      ?? (typeof obj['tokens_used'] === 'number' ? (obj['tokens_used'] as number) : undefined),
     backend_summary:
-      typeof (payload as Record<string, unknown>)['backend_summary'] === 'string'
-        ? ((payload as Record<string, unknown>)['backend_summary'] as string)
+      typeof obj['backend_summary'] === 'string'
+        ? (obj['backend_summary'] as string)
         : typeof backendField?.summary === 'string'
-        ? backendField.summary
+          ? backendField.summary
+          : undefined,
+    has_session_summary: typeof contextDebug?.['has_session_summary'] === 'boolean'
+      ? (contextDebug['has_session_summary'] as boolean)
+      : typeof obj['has_session_summary'] === 'boolean'
+        ? (obj['has_session_summary'] as boolean)
         : undefined,
-    tokens_used: typeof (payload as Record<string, unknown>)['tokens_used'] === 'number'
-      ? ((payload as Record<string, unknown>)['tokens_used'] as number)
-      : undefined,
-    has_session_summary: typeof (payload as Record<string, unknown>)['has_session_summary'] === 'boolean'
-      ? ((payload as Record<string, unknown>)['has_session_summary'] as boolean)
-      : undefined,
     agent_prompt_preview:
-      typeof (payload as Record<string, unknown>)['agent_prompt_preview'] === 'string'
-        ? ((payload as Record<string, unknown>)['agent_prompt_preview'] as string)
+      typeof obj['agent_prompt_preview'] === 'string'
+        ? (obj['agent_prompt_preview'] as string)
         : undefined,
     context_backends:
-      typeof contextBackends === 'object' && contextBackends !== null
-        ? (contextBackends as Record<string, unknown>)
-        : undefined,
+      typeof (contextDebug?.['context_backends']) === 'object' && contextDebug?.['context_backends'] !== null
+        ? (contextDebug['context_backends'] as Record<string, unknown>)
+        : typeof contextBackends === 'object' && contextBackends !== null
+          ? (contextBackends as Record<string, unknown>)
+          : undefined,
     turn_meta: typeof turnMeta === 'object' && turnMeta !== null ? (turnMeta as Record<string, unknown>) : undefined,
+    context_debug_missing: !hasContextDebug,
+    context_debug_raw: contextDebug,
   };
 
   const hasValue = Object.values(snapshot).some((v) => v !== undefined);

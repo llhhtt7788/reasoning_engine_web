@@ -14,6 +14,13 @@ export type LangGraphPathEvent = {
   [k: string]: unknown;
 };
 
+export type ContextTokensBreakdown = {
+  total?: number;
+  memories?: number;
+  recent_turns?: number;
+  summary?: number;
+};
+
 export type ObservabilitySnapshot = {
   turn_id?: string;
   session_id?: string;
@@ -25,13 +32,15 @@ export type ObservabilitySnapshot = {
   llm_index?: number;
   model?: string;
   memory_selected?: number;
-  context_tokens?: number;
+  context_tokens?: ContextTokensBreakdown;
   tokens_used?: number;
   backend_summary?: string;
   has_session_summary?: boolean;
   agent_prompt_preview?: string;
   context_backends?: Record<string, unknown>;
   turn_meta?: Record<string, unknown>;
+  context_debug_missing?: boolean;
+  context_debug_raw?: Record<string, unknown>;
 };
 
 export type ChatRouteEvent = ObservabilitySnapshot & {
