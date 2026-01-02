@@ -2,6 +2,7 @@
 // Minimal Node.js HTTP server that handles OPTIONS and POST for /api/v1/chat/context
 // Supports SSE (Server-Sent Events) to simulate streaming response with context debug data.
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const http = require('http');
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 11211;
 

@@ -8,14 +8,21 @@ type ContextDebugPanelProps = {
   sessionId?: string;
   conversationId?: string;
   observability?: ObservabilitySnapshot;
+  highlightAgent?: string | null;
+  highlightNodeName?: string | null;
 };
 
 const SectionLabel: React.FC<{ title: string }> = ({ title }) => (
   <div className="text-[11px] font-semibold text-gray-700 uppercase tracking-wide">{title}</div>
 );
 
-const FieldRow: React.FC<{ label: string; value?: React.ReactNode }> = ({ label, value }) => (
-  <div className="flex items-start justify-between gap-2 text-xs text-gray-700">
+const FieldRow: React.FC<{ label: string; value?: React.ReactNode; highlight?: boolean }> = ({ label, value, highlight }) => (
+  <div
+    className={[
+      'flex items-start justify-between gap-2 text-xs text-gray-700 rounded-lg',
+      highlight ? 'bg-amber-50 border border-amber-200 px-2 py-1' : '',
+    ].join(' ')}
+  >
     <div className="text-gray-500 whitespace-nowrap">{label}</div>
     <div className="text-right font-mono break-all text-gray-900 flex-1">{value ?? '—'}</div>
   </div>
@@ -26,6 +33,8 @@ export const ContextDebugPanel: React.FC<ContextDebugPanelProps> = ({
   sessionId,
   conversationId,
   observability,
+  highlightAgent,
+  highlightNodeName,
 }) => {
   const snapshot = observability;
   if (!turnId && !snapshot) return null;
@@ -40,6 +49,13 @@ export const ContextDebugPanel: React.FC<ContextDebugPanelProps> = ({
   const contextBackendsValue = snapshot?.context_backends
     ? JSON.stringify(snapshot.context_backends)
     : undefined;
+
+  const isAgentHighlighted = highlightAgent && snapshot?.agent && highlightAgent === snapshot.agent;
+  const shouldHighlightContext = Boolean(highlightNodeName);
+
+  const memorySelectedValue = Array.isArray(snapshot?.memory_selected)
+    ? snapshot?.memory_selected.length
+    : snapshot?.memory_selected;
 
   return (
     <section className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 space-y-3">
@@ -64,7 +80,7 @@ export const ContextDebugPanel: React.FC<ContextDebugPanelProps> = ({
       <div className="space-y-2">
         <SectionLabel title="代理" />
         <FieldRow label="persona" value={snapshot?.persona || '—'} />
-        <FieldRow label="agent" value={snapshot?.agent || '—'} />
+        <FieldRow label="agent" value={snapshot?.agent || '—'} highlight={Boolean(isAgentHighlighted)} />
         <FieldRow label="llm_index" value={snapshot?.llm_index ?? '—'} />
         <FieldRow label="task_type" value={taskType || '—'} />
       </div>
@@ -73,23 +89,22 @@ export const ContextDebugPanel: React.FC<ContextDebugPanelProps> = ({
         <SectionLabel title="上下文" />
         <FieldRow
           label="memory_selected"
-          value={
-            Array.isArray(snapshot?.memory_selected as any)
-              ? (snapshot?.memory_selected as any).length
-              : snapshot?.memory_selected
-          }
+          value={memorySelectedValue}
+          highlight={shouldHighlightContext}
         />
-        <FieldRow label="tokens_used" value={tokensTotal} />
-        <FieldRow label="context_tokens.memory" value={tokens?.memories} />
-        <FieldRow label="context_tokens.recent" value={tokens?.recent_turns} />
-        <FieldRow label="context_tokens.summary" value={tokens?.summary} />
+        <FieldRow label="tokens_used" value={tokensTotal} highlight={shouldHighlightContext} />
+        <FieldRow label="context_tokens.memory" value={tokens?.memories} highlight={shouldHighlightContext} />
+        <FieldRow label="context_tokens.recent" value={tokens?.recent_turns} highlight={shouldHighlightContext} />
+        <FieldRow label="context_tokens.summary" value={tokens?.summary} highlight={shouldHighlightContext} />
         <FieldRow
           label="has_session_summary"
           value={typeof snapshot?.has_session_summary === 'boolean' ? snapshot.has_session_summary.toString() : '—'}
+          highlight={shouldHighlightContext}
         />
         <FieldRow
           label="context_backends"
           value={contextBackendsValue ?? '—'}
+          highlight={shouldHighlightContext}
         />
         <FieldRow label="backend.summary" value={snapshot?.backend_summary || '—'} />
       </div>
