@@ -6,6 +6,7 @@ import { ContextDebugPanel } from './ContextDebugPanel';
 
 export const ReasoningSidebar: React.FC = () => {
   const messages = useChatStore((s) => s.messages);
+  const selectedDecisionNode = useChatStore((s) => s.selectedDecisionNode);
 
   const current = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -33,6 +34,8 @@ export const ReasoningSidebar: React.FC = () => {
           sessionId={current?.session_id}
           conversationId={current?.conversation_id}
           observability={current?.observability}
+          highlightAgent={selectedDecisionNode?.agent}
+          highlightNodeName={selectedDecisionNode?.node}
         />
 
         {current?.reasoning ? (

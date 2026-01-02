@@ -17,6 +17,10 @@ type ChatState = {
   setLastAssistantRoute: (route: ChatRouteEvent) => void;
   appendLangGraphPathEvent: (evt: LangGraphPathEvent) => void;
   setLangGraphPathEvents: (turnId: string, events: LangGraphPathEvent[]) => void;
+
+  // UI selection for decision path
+  selectedDecisionNode: { runId?: string | null; node?: string | null; agent?: string | null } | null;
+  setSelectedDecisionNode: (payload: { runId?: string | null; node?: string | null; agent?: string | null } | null) => void;
 };
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -157,4 +161,7 @@ export const useChatStore = create<ChatState>((set) => ({
       }
       return { messages };
     }),
+
+  selectedDecisionNode: null,
+  setSelectedDecisionNode: (payload) => set({ selectedDecisionNode: payload }),
 }));
