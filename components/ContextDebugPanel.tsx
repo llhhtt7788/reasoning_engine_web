@@ -61,10 +61,15 @@ export const ContextDebugPanel: React.FC<ContextDebugPanelProps> = ({
         <SectionLabel title="上下文" />
         <FieldRow label="memory_selected" value={snapshot?.memory_selected?.toString() ?? '—'} />
         <FieldRow label="context_tokens" value={snapshot?.context_tokens?.toString() ?? '—'} />
+        <FieldRow label="tokens_used" value={snapshot?.tokens_used?.toString() ?? '—'} />
         <FieldRow label="backend.summary" value={snapshot?.backend_summary || '—'} />
         <FieldRow
           label="has_session_summary"
           value={typeof snapshot?.has_session_summary === 'boolean' ? snapshot.has_session_summary.toString() : '—'}
+        />
+        <FieldRow
+          label="context_backends"
+          value={snapshot?.context_backends ? JSON.stringify(snapshot.context_backends) : '—'}
         />
       </div>
 

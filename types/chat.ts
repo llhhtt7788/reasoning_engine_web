@@ -26,9 +26,11 @@ export type ObservabilitySnapshot = {
   model?: string;
   memory_selected?: number;
   context_tokens?: number;
+  tokens_used?: number;
   backend_summary?: string;
   has_session_summary?: boolean;
   agent_prompt_preview?: string;
+  context_backends?: Record<string, unknown>;
   turn_meta?: Record<string, unknown>;
 };
 

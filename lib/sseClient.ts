@@ -67,6 +67,7 @@ function extractObservability(payload: SSEData | Record<string, unknown> | null 
   const backendField = (payload as Record<string, unknown>)['backend'] as
     | { summary?: string }
     | undefined;
+  const contextBackends = (payload as Record<string, unknown>)['context_backends'];
 
   const snapshot: ObservabilitySnapshot = {
     turn_id: (payload as Record<string, unknown>)['turn_id'] as string | undefined,
@@ -95,12 +96,19 @@ function extractObservability(payload: SSEData | Record<string, unknown> | null 
         : typeof backendField?.summary === 'string'
         ? backendField.summary
         : undefined,
+    tokens_used: typeof (payload as Record<string, unknown>)['tokens_used'] === 'number'
+      ? ((payload as Record<string, unknown>)['tokens_used'] as number)
+      : undefined,
     has_session_summary: typeof (payload as Record<string, unknown>)['has_session_summary'] === 'boolean'
       ? ((payload as Record<string, unknown>)['has_session_summary'] as boolean)
       : undefined,
     agent_prompt_preview:
       typeof (payload as Record<string, unknown>)['agent_prompt_preview'] === 'string'
         ? ((payload as Record<string, unknown>)['agent_prompt_preview'] as string)
+        : undefined,
+    context_backends:
+      typeof contextBackends === 'object' && contextBackends !== null
+        ? (contextBackends as Record<string, unknown>)
         : undefined,
     turn_meta: typeof turnMeta === 'object' && turnMeta !== null ? (turnMeta as Record<string, unknown>) : undefined,
   };
@@ -144,10 +152,16 @@ function parseSSEFrame(frameText: string): SSEFrame | null {
   return { event: eventName, data };
 }
 
+export type ChatRequestContext = {
+  conversationId: string;
+  sessionId?: string | null;
+};
+
 export async function streamChat(
   message: string,
   history: ChatMessage[],
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
+  context: ChatRequestContext
 ): Promise<void> {
   const { onContent, onReasoning, onRoute, onAgent, onLangGraphPath, onObservability, onError, onComplete } = callbacks;
 
@@ -167,6 +181,8 @@ export async function streamChat(
       user: message,
       stream: true,
       messages: messageHistory,
+      conversation_id: context.conversationId,
+      session_id: context.sessionId ?? null,
     };
 
     // Add optional fields from cached environment configuration
