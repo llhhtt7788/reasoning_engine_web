@@ -171,7 +171,14 @@ function extractObservability(payload: SSEData | Record<string, unknown> | null 
     context_debug_raw: contextDebug,
   };
 
-  const hasValue = Object.values(snapshot).some((v) => v !== undefined);
+  // Remove undefined keys so we don't overwrite existing data with undefined when merging
+  Object.keys(snapshot).forEach((key) => {
+    if (snapshot[key as keyof ObservabilitySnapshot] === undefined) {
+      delete snapshot[key as keyof ObservabilitySnapshot];
+    }
+  });
+
+  const hasValue = Object.keys(snapshot).length > 0;
   return hasValue ? snapshot : null;
 }
 
@@ -300,11 +307,15 @@ export async function streamChat(
         const obj = safeParseJson<SSEData>(frame.data);
         if (!obj) continue;
 
+        // Extract observability from ANY frame (route, agent, context_debug, or meta in delta)
+        const obs = extractObservability(obj);
+        if (obs && onObservability) {
+          onObservability(obs);
+        }
+
         // 1) route frame (usually first)
         if (obj.event === 'route' && onRoute) {
           onRoute(obj as unknown as ChatRouteEvent);
-          const obs = extractObservability(obj);
-          if (obs && onObservability) onObservability(obs);
           continue;
         }
 
@@ -312,8 +323,6 @@ export async function streamChat(
         if (obj.event === 'agent' && onAgent) {
           const agentObj = obj as unknown as { event?: 'agent'; agent?: string; llm_index?: number; [k: string]: unknown };
           onAgent(agentObj);
-          const obs = extractObservability(agentObj);
-          if (obs && onObservability) onObservability(obs);
           continue;
         }
 
@@ -321,8 +330,11 @@ export async function streamChat(
         const eventName = frame.event;
         if ((eventName === 'langgraph_path' || obj.event === 'langgraph_path') && onLangGraphPath) {
           onLangGraphPath(obj as unknown as LangGraphPathEvent);
-          const obs = extractObservability(obj);
-          if (obs && onObservability) onObservability(obs);
+          continue;
+        }
+
+        // 2.5) context_debug frame (explicit event)
+        if (eventName === 'context_debug') {
           continue;
         }
 

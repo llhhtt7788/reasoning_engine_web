@@ -71,7 +71,14 @@ export const ContextDebugPanel: React.FC<ContextDebugPanelProps> = ({
 
       <div className="space-y-2">
         <SectionLabel title="上下文" />
-        <FieldRow label="memory_selected" value={snapshot?.memory_selected} />
+        <FieldRow
+          label="memory_selected"
+          value={
+            Array.isArray(snapshot?.memory_selected as any)
+              ? (snapshot?.memory_selected as any).length
+              : snapshot?.memory_selected
+          }
+        />
         <FieldRow label="tokens_used" value={tokensTotal} />
         <FieldRow label="context_tokens.memory" value={tokens?.memories} />
         <FieldRow label="context_tokens.recent" value={tokens?.recent_turns} />

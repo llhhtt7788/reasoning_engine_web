@@ -16,6 +16,7 @@ type ChatState = {
   // LangGraph trace binding
   setLastAssistantRoute: (route: ChatRouteEvent) => void;
   appendLangGraphPathEvent: (evt: LangGraphPathEvent) => void;
+  setLangGraphPathEvents: (turnId: string, events: LangGraphPathEvent[]) => void;
 };
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -141,6 +142,19 @@ export const useChatStore = create<ChatState>((set) => ({
         }
       }
 
+      return { messages };
+    }),
+
+  setLangGraphPathEvents: (turnId, events) =>
+    set((state) => {
+      const messages = [...state.messages];
+      const idx = messages.findIndex((m) => m.turn_id === turnId && m.role === 'assistant');
+      if (idx >= 0) {
+        messages[idx] = {
+          ...messages[idx],
+          langgraph_path: events,
+        };
+      }
       return { messages };
     }),
 }));
