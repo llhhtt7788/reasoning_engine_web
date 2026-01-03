@@ -8,9 +8,8 @@ Content-Type: application/json
   "stream": true
 }
 
-
 ###embeddings
-POST http://172.16.11.35:9925/v1/embeddings
+POST http://139.196.188.251:9925/v1/embeddings
 Content-Type: application/json
 
 {
@@ -19,7 +18,7 @@ Content-Type: application/json
 }
 
 ###rerank
-POST http://172.16.11.35:9935/v2/rerank
+POST http://139.196.188.251:9935/v1/rerank
 Content-Type: application/json
 
 {
@@ -34,7 +33,7 @@ Content-Type: application/json
 
 
 ###chat completion
-POST http://172.16.11.35:9903/v1/chat/completions
+POST http://139.196.188.251:9903/v1/chat/completions
 Content-Type: application/json
 
 {
@@ -47,7 +46,7 @@ Content-Type: application/json
 }
 
 ###chat completion
-POST http://172.16.11.35:9902/v1/chat/completions
+POST http://139.196.188.251:9902/v1/chat/completions
 Content-Type: application/json
 
 {

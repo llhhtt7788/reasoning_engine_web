@@ -1,6 +1,8 @@
 // lib/sseClient.ts
 import { ChatMessage, ChatRouteEvent, LangGraphPathEvent, ObservabilitySnapshot } from '@/types/chat';
 
+// NOTE: In the browser we always go through the Next.js proxy route so we don't
+// fight CORS/SSE restrictions. The proxy itself forwards to NEXT_PUBLIC_API_URL.
 const API_URL = typeof window !== 'undefined'
   ? '/api/proxy'
   : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:11211/api/v1/chat/context');
@@ -28,6 +30,8 @@ export type StreamCallbacks = {
   onReasoning: (reasoning: string) => void;
   onRoute?: (route: ChatRouteEvent) => void;
   onAgent?: (agent: { event?: 'agent'; agent?: string; llm_index?: number; [k: string]: unknown }) => void;
+  // LangGraph trace is no longer emitted by /api/v1/chat/context (moved to replay API)
+  // Keep the callback optional for backward compatibility, but we won't invoke it here.
   onLangGraphPath?: (evt: LangGraphPathEvent) => void;
   onObservability?: (meta: ObservabilitySnapshot) => void;
   onError: (error: Error) => void;
@@ -228,7 +232,7 @@ export async function streamChat(
   callbacks: StreamCallbacks,
   context: ChatRequestContext
 ): Promise<void> {
-  const { onContent, onReasoning, onRoute, onAgent, onLangGraphPath, onObservability, onError, onComplete } = callbacks;
+  const { onContent, onReasoning, onRoute, onAgent, onObservability, onError, onComplete } = callbacks;
 
   try {
     // Convert chat history to the format expected by the API
@@ -258,9 +262,9 @@ export async function streamChat(
     if (ENV_CONFIG.appId) requestBody.app_id = ENV_CONFIG.appId;
     if (ENV_CONFIG.threadId) requestBody.thread_id = ENV_CONFIG.threadId;
 
-    // Force SSE and graph tracing on (MVP). If you later want to make it configurable,
-    // thread a flag from UI.
-    const url = `${API_URL}?sse=true&trace_graph=true`;
+    // Force SSE on (chat streaming). Graph tracing happens via /api/v1/langgraph/path.
+    // Backend supports `stream=true/false` and some deployments may accept `sse=true/false`.
+    const url = `${API_URL}?stream=true&sse=true`;
 
     const response = await fetch(url, {
       method: 'POST',
@@ -326,10 +330,10 @@ export async function streamChat(
           continue;
         }
 
-        // 2) langgraph path frame (SSE event channel or payload.event)
+        // 2) langgraph path frame (deprecated in chat stream)
+        // Backend no longer emits langgraph_path from /chat/context; ignore even if present.
         const eventName = frame.event;
-        if ((eventName === 'langgraph_path' || obj.event === 'langgraph_path') && onLangGraphPath) {
-          onLangGraphPath(obj as unknown as LangGraphPathEvent);
+        if (eventName === 'langgraph_path' || obj.event === 'langgraph_path') {
           continue;
         }
 

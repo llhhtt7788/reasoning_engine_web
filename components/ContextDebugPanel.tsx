@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import type { ObservabilitySnapshot } from '@/types/chat';
 
 type ContextDebugPanelProps = {
@@ -27,6 +27,21 @@ const FieldRow: React.FC<{ label: string; value?: React.ReactNode; highlight?: b
     <div className="text-right font-mono break-all text-gray-900 flex-1">{value ?? '—'}</div>
   </div>
 );
+
+const Badge: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
+  <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-xs">
+    <span className="text-gray-600">{label}</span>
+    <span className="font-mono text-gray-900">{value}</span>
+  </div>
+);
+
+function asNumber(v: unknown): number | null {
+  return typeof v === 'number' && !Number.isNaN(v) ? v : null;
+}
+
+function asBool(v: unknown): boolean | null {
+  return typeof v === 'boolean' ? v : null;
+}
 
 export const ContextDebugPanel: React.FC<ContextDebugPanelProps> = ({
   turnId,
@@ -57,11 +72,24 @@ export const ContextDebugPanel: React.FC<ContextDebugPanelProps> = ({
     ? snapshot?.memory_selected.length
     : snapshot?.memory_selected;
 
+  const debugRaw = snapshot?.context_debug_raw as Record<string, unknown> | undefined;
+  const embeddingUsed = asBool(debugRaw?.['embedding_used']);
+  const rerankUsed = asBool(debugRaw?.['rerank_used']);
+  const recalledCount = asNumber(debugRaw?.['recalled_count']);
+  const injectedCount = asNumber(debugRaw?.['injected_count']);
+
+  const memories = useMemo(() => {
+    const raw = debugRaw?.['memories'];
+    return Array.isArray(raw) ? (raw as Record<string, unknown>[]) : [];
+  }, [debugRaw]);
+
+  const [showRaw, setShowRaw] = useState(false);
+
   return (
     <section className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 space-y-3">
       <div>
         <div className="text-sm font-semibold text-gray-900">上下文调试</div>
-        <div className="text-xs text-gray-500">追踪当前对话轮的资源占用与 Prompt 预览</div>
+        <div className="text-xs text-gray-500">展示 Context Engine 的决策与注入结果（w.1.0.0）</div>
       </div>
 
       {snapshot?.context_debug_missing ? (
@@ -86,12 +114,18 @@ export const ContextDebugPanel: React.FC<ContextDebugPanelProps> = ({
       </div>
 
       <div className="space-y-2">
+        <SectionLabel title="Summary（w.1.0.0）" />
+        <div className="grid grid-cols-2 gap-2">
+          <Badge label="Embedding" value={embeddingUsed === null ? '—' : embeddingUsed ? 'ON' : 'OFF'} />
+          <Badge label="Rerank" value={rerankUsed === null ? '—' : rerankUsed ? 'ON' : 'OFF'} />
+          <Badge label="Recall" value={recalledCount ?? '—'} />
+          <Badge label="Injected" value={injectedCount ?? '—'} />
+        </div>
+      </div>
+
+      <div className="space-y-2">
         <SectionLabel title="上下文" />
-        <FieldRow
-          label="memory_selected"
-          value={memorySelectedValue}
-          highlight={shouldHighlightContext}
-        />
+        <FieldRow label="memory_selected (compat)" value={memorySelectedValue} highlight={shouldHighlightContext} />
         <FieldRow label="tokens_used" value={tokensTotal} highlight={shouldHighlightContext} />
         <FieldRow label="context_tokens.memory" value={tokens?.memories} highlight={shouldHighlightContext} />
         <FieldRow label="context_tokens.recent" value={tokens?.recent_turns} highlight={shouldHighlightContext} />
@@ -107,6 +141,57 @@ export const ContextDebugPanel: React.FC<ContextDebugPanelProps> = ({
           highlight={shouldHighlightContext}
         />
         <FieldRow label="backend.summary" value={snapshot?.backend_summary || '—'} />
+      </div>
+
+      {memories.length > 0 ? (
+        <div className="space-y-2">
+          <SectionLabel title="Memory Ranking（候选 Top-K）" />
+          <div className="max-h-56 overflow-auto rounded-lg border border-gray-200">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                <tr className="text-left">
+                  <th className="p-2 w-[70px]">Injected</th>
+                  <th className="p-2 w-[80px]">Source</th>
+                  <th className="p-2">Content</th>
+                  <th className="p-2 w-[70px]">Final</th>
+                </tr>
+              </thead>
+              <tbody>
+                {memories.map((m, idx) => {
+                  const injected = Boolean(m['injected']);
+                  const source = typeof m['source'] === 'string' ? (m['source'] as string) : '—';
+                  const content = typeof m['content'] === 'string' ? (m['content'] as string) : '';
+                  const finalScore = typeof m['final_score'] === 'number' ? (m['final_score'] as number) : null;
+                  return (
+                    <tr key={String(m['memory_id'] ?? idx)} className="border-b border-gray-100 last:border-b-0">
+                      <td className="p-2 font-mono">{injected ? '✔' : '—'}</td>
+                      <td className="p-2 font-mono text-gray-700">{source}</td>
+                      <td className="p-2 text-gray-900">
+                        <div className="line-clamp-2 break-words">{content || '—'}</div>
+                      </td>
+                      <td className="p-2 font-mono">{finalScore === null ? '—' : finalScore.toFixed(2)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="space-y-2">
+        <button
+          type="button"
+          className="text-xs text-gray-600 hover:text-gray-900 underline"
+          onClick={() => setShowRaw((v) => !v)}
+        >
+          {showRaw ? '隐藏' : '展开'} 原始 context_debug JSON
+        </button>
+        {showRaw && debugRaw ? (
+          <pre className="max-h-56 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-gray-50 border border-gray-200 p-3 text-xs leading-relaxed text-gray-800">
+            {JSON.stringify(debugRaw, null, 2)}
+          </pre>
+        ) : null}
       </div>
 
       {snapshot?.agent_prompt_preview ? (

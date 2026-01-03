@@ -7,10 +7,7 @@ import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css'; // 确保KaTeX样式加载
-import { ReasoningPanel } from './ReasoningPanel';
-import { LangGraphPathPanel } from './LangGraphPathPanel';
-import { ChatMessage, LangGraphPathEvent } from '@/types/chat';
-import { useChatStore } from '@/store/chatStore';
+import { ChatMessage } from '@/types/chat';
 
 type MessageListProps = {
   messages: ChatMessage[];
@@ -18,28 +15,14 @@ type MessageListProps = {
 };
 
 export const MessageList: React.FC<MessageListProps> = ({ messages, showMetaPanels = true }) => {
+  // showMetaPanels currently unused (kept for API compatibility)
+  void showMetaPanels;
+
   const bottomRef = useRef<HTMLDivElement>(null);
-  const appendLangGraphPathEvent = useChatStore((s) => s.appendLangGraphPathEvent);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
-
-  const replayByTurnId = async (turnId: string) => {
-    const resp = await fetch(`/api/v1/langgraph/path?turn_id=${encodeURIComponent(turnId)}`);
-    if (!resp.ok) throw new Error(`Replay API error: ${resp.status}`);
-    const json = (await resp.json()) as {
-      events?: Array<Record<string, unknown>>;
-    };
-
-    for (const raw of json.events ?? []) {
-      appendLangGraphPathEvent({
-        ...(raw as unknown as LangGraphPathEvent),
-        event: 'langgraph_path',
-        turn_id: turnId,
-      });
-    }
-  };
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
@@ -56,22 +39,6 @@ export const MessageList: React.FC<MessageListProps> = ({ messages, showMetaPane
 
         return (
           <div key={index} className="space-y-2">
-            {/* 可选的元面板，位于助手气泡上方 */}
-            {showMetaPanels && message.role === 'assistant' && (
-              <div className={[bubbleAlign, 'max-w-[85%]'].join(' ')}>
-                <ReasoningPanel reasoning={message.reasoning} />
-                <LangGraphPathPanel
-                  turnId={message.turn_id}
-                  sessionId={message.session_id}
-                  conversationId={message.conversation_id}
-                  events={message.langgraph_path}
-                  onReplayAction={
-                    message.turn_id ? () => replayByTurnId(message.turn_id as string) : undefined
-                  }
-                />
-              </div>
-            )}
-
             {/* 消息内容 */}
             <div
               className={[
