@@ -14,7 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body className="antialiased">
+      <body id="workbench-root" className="antialiased med-go-workbench">
         {children}
       </body>
     </html>

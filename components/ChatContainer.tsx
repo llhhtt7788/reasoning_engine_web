@@ -1,7 +1,7 @@
 // components/ChatContainer.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useChatStore } from '@/store/chatStore';
 import { MessageList } from './MessageList';
 import { InputBar } from './InputBar';
@@ -10,11 +10,47 @@ import { DecisionPathSidebar } from './DecisionPathSidebar';
 import { ReasoningSidebar } from './ReasoningSidebar';
 import {
     getOrInitConversationId,
-    getReusableSessionId,
     persistConversationId,
     persistSessionId,
-    SESSION_TTL_MS,
+    resetSessionState,
 } from '@/lib/sessionManager';
+
+const MODE_FADE_DELAY_MS = 1400;
+
+function ModeBadge({ mode }: { mode: 'idle' | 'reasoning' | 'direct' }) {
+    if (mode === 'idle') return null;
+
+    const label = mode === 'reasoning' ? '深度思考' : '快速回答';
+    const cls = mode === 'reasoning'
+        ? 'border-red-200 bg-red-50 text-red-700'
+        : 'border-blue-200 bg-blue-50 text-blue-700';
+
+    return (
+        <span
+            className={[
+                'inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-medium',
+                cls,
+            ].join(' ')}
+            aria-label={`当前模式：${label}`}
+            title={`当前模式：${label}`}
+        >
+            <span
+                className={[
+                    'inline-block h-2 w-2 rounded-full',
+                    mode === 'reasoning' ? 'bg-red-500 animate-pulse' : 'bg-blue-500',
+                ].join(' ')}
+            />
+            {label}
+        </span>
+    );
+}
+
+function newClientSessionId(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    return `sess_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
 
 export const ChatContainer: React.FC = () => {
     const {
@@ -26,23 +62,81 @@ export const ChatContainer: React.FC = () => {
         clearMessages,
         setLastAssistantRoute,
         mergeAssistantMeta,
+        uiMode,
+        setUiMode,
     } = useChatStore();
 
     const [conversationId, setConversationId] = useState<string | undefined>(() => getOrInitConversationId());
-    const [sessionId, setSessionId] = useState<string | null>(() => getReusableSessionId(SESSION_TTL_MS));
+    const [sessionId, setSessionId] = useState<string | null>(null);
+
+    // Always refresh session_id on page load.
+    useEffect(() => {
+        const fresh = newClientSessionId();
+        resetSessionState();
+        persistSessionId(fresh);
+        setSessionId(fresh);
+    }, []);
+
+    const fadeTimerRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        const el = document.getElementById('workbench-root');
+        if (!el) return;
+
+        el.classList.remove('mode-reasoning', 'mode-direct');
+        if (uiMode === 'reasoning') {
+            el.classList.add('mode-reasoning');
+        } else if (uiMode === 'direct') {
+            el.classList.add('mode-direct');
+        }
+    }, [uiMode]);
+
+    useEffect(() => {
+        return () => {
+            if (fadeTimerRef.current) {
+                window.clearTimeout(fadeTimerRef.current);
+                fadeTimerRef.current = null;
+            }
+        };
+    }, []);
+
+    const scheduleFadeToIdle = () => {
+        if (fadeTimerRef.current) {
+            window.clearTimeout(fadeTimerRef.current);
+            fadeTimerRef.current = null;
+        }
+        fadeTimerRef.current = window.setTimeout(() => {
+            setUiMode('idle');
+            fadeTimerRef.current = null;
+        }, MODE_FADE_DELAY_MS);
+    };
 
     const handleSend = async (message: string) => {
+        // New request cancels any pending fade-out.
+        if (fadeTimerRef.current) {
+            window.clearTimeout(fadeTimerRef.current);
+            fadeTimerRef.current = null;
+        }
+
         const ensuredConversationId = conversationId ?? getOrInitConversationId();
         setConversationId(ensuredConversationId);
 
-        const reusableSessionId = sessionId ?? getReusableSessionId(SESSION_TTL_MS);
-        setSessionId(reusableSessionId);
+        const ensuredSessionId = sessionId ?? newClientSessionId();
+        if (!sessionId) {
+            persistSessionId(ensuredSessionId);
+            setSessionId(ensuredSessionId);
+        }
 
         // Add user message
         addMessage({ role: 'user', content: message, conversation_id: ensuredConversationId });
 
         // Add empty assistant message
-        addMessage({ role: 'assistant', content: '', conversation_id: ensuredConversationId, session_id: reusableSessionId ?? undefined });
+        addMessage({
+            role: 'assistant',
+            content: '',
+            conversation_id: ensuredConversationId,
+            session_id: ensuredSessionId,
+        });
 
         setStreaming(true);
 
@@ -61,6 +155,13 @@ export const ChatContainer: React.FC = () => {
                         persistConversationId(route.conversation_id);
                         setConversationId(route.conversation_id);
                     }
+
+                    // Some backends already decide agent in route.
+                    if (route.agent === 'llm_thinking') {
+                        setUiMode('reasoning');
+                    } else if (route.agent === 'llm_fast') {
+                        setUiMode('direct');
+                    }
                 },
                 // NOTE: backend no longer emits langgraph_path on chat SSE; path is loaded via /api/v1/langgraph/path.
                 onContent: (content) => {
@@ -75,6 +176,12 @@ export const ChatContainer: React.FC = () => {
                             agent: agentEvt.agent,
                             llm_index: agentEvt.llm_index,
                         });
+
+                        if (agentEvt.agent === 'llm_thinking') {
+                            setUiMode('reasoning');
+                        } else if (agentEvt.agent === 'llm_fast') {
+                            setUiMode('direct');
+                        }
                     }
                 },
                 onObservability: (meta) => {
@@ -91,14 +198,16 @@ export const ChatContainer: React.FC = () => {
                 onError: (error) => {
                     updateLastAssistant(`\n\n请求失败: ${error.message}`);
                     setStreaming(false);
+                    scheduleFadeToIdle();
                 },
                 onComplete: () => {
                     setStreaming(false);
+                    scheduleFadeToIdle();
                 },
             },
             {
                 conversationId: ensuredConversationId ?? 'unknown_conversation',
-                sessionId: reusableSessionId,
+                sessionId: ensuredSessionId,
             }
         );
     };
@@ -106,6 +215,13 @@ export const ChatContainer: React.FC = () => {
     const handleClear = () => {
         if (confirm('确定要清空对话历史吗？')) {
             clearMessages();
+            setUiMode('idle');
+
+            // Refresh session id on clear.
+            const fresh = newClientSessionId();
+            resetSessionState();
+            persistSessionId(fresh);
+            setSessionId(fresh);
         }
     };
 
@@ -114,7 +230,10 @@ export const ChatContainer: React.FC = () => {
             {/* Header */}
             <header className="border-b border-gray-200 bg-white/70 backdrop-blur px-4 py-4">
                 <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-bold text-gray-950 tracking-tight">Med-Go 推理工作台</h1>
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-2xl font-bold text-gray-950 tracking-tight">Med-Go 推理工作台</h1>
+                        <ModeBadge mode={uiMode} />
+                    </div>
                     <button
                         onClick={handleClear}
                         disabled={messages.length === 0 || isStreaming}

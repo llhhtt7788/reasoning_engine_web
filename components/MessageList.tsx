@@ -57,15 +57,15 @@ export const MessageList: React.FC<MessageListProps> = ({ messages, showMetaPane
                 ].join(' ')}
               >
                 <ReactMarkdown
-                  remarkPlugins={[remarkGfm, remarkMath]}
+                  remarkPlugins={[
+                    remarkGfm,
+                    // Ensure $...$ and $$...$$ are parsed as math
+                    [remarkMath, { singleDollarTextMath: true }],
+                  ]}
                   rehypePlugins={[rehypeKatex]}
                   components={{
                     // 避免 p 默认 margin 造成气泡内间距怪异
                     p: ({ children }) => <p className="m-0">{children}</p>,
-                    // Avoid block code/inline elements forcing full width
-                    pre: ({ children }) => (
-                      <pre className="m-0 whitespace-pre-wrap break-words">{children}</pre>
-                    ),
                   }}
                 >
                   {message.content || ''}

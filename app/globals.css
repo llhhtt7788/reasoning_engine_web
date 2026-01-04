@@ -3,19 +3,23 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
-}
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Edge Aura (light mode defaults) */
+  --color-thinking: rgba(255, 77, 79, 0.22);
+  --color-thinking-strong: rgba(255, 77, 79, 0.38);
+  --color-fast: rgba(24, 144, 255, 0.18);
+  --transition-speed: 0.8s;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+
+    /* Edge Aura (dark mode: reduce alpha to avoid foggy/neon feel) */
+    --color-thinking: rgba(255, 77, 79, 0.14);
+    --color-thinking-strong: rgba(255, 77, 79, 0.26);
+    --color-fast: rgba(24, 144, 255, 0.12);
   }
 }
 
@@ -23,4 +27,95 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Workbench root: hosts fixed overlay layers */
+.med-go-workbench {
+  min-height: 100vh;
+  position: relative;
+}
+
+/* 1) Edge Aura overlay */
+.med-go-workbench::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2147483646;
+  opacity: 0;
+  transition: opacity var(--transition-speed) ease-in-out;
+}
+
+/* 2) Top status strip overlay (always visible when in a mode) */
+.med-go-workbench::after {
+  content: '';
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 10px;
+  pointer-events: none;
+  z-index: 2147483647;
+  opacity: 0;
+  transition: opacity var(--transition-speed) ease-in-out;
+}
+
+/* Deep thinking mode: red edge glow + breathing */
+.mode-reasoning::before {
+  opacity: 1;
+  background:
+    radial-gradient(closest-side at 0% 50%, var(--color-thinking-strong), transparent 48%),
+    radial-gradient(closest-side at 100% 50%, var(--color-thinking-strong), transparent 48%),
+    radial-gradient(closest-side at 50% 0%, var(--color-thinking), transparent 55%),
+    radial-gradient(closest-side at 50% 100%, var(--color-thinking), transparent 55%);
+  filter: blur(22px);
+  animation: breathing-aura 3.5s infinite alternate ease-in-out;
+  will-change: opacity, filter;
+}
+
+.mode-reasoning::after {
+  opacity: 1;
+  background: linear-gradient(90deg, rgba(255, 77, 79, 0.00), var(--color-thinking-strong), rgba(255, 77, 79, 0.00));
+  filter: blur(0.5px);
+  animation: breathing-strip 1.8s infinite alternate ease-in-out;
+}
+
+/* Fast/direct mode: blue edge glow + subtle strip */
+.mode-direct::before {
+  opacity: 1;
+  background:
+    radial-gradient(closest-side at 0% 50%, var(--color-fast), transparent 52%),
+    radial-gradient(closest-side at 100% 50%, var(--color-fast), transparent 52%),
+    radial-gradient(closest-side at 50% 0%, var(--color-fast), transparent 60%),
+    radial-gradient(closest-side at 50% 100%, var(--color-fast), transparent 60%);
+  filter: blur(22px);
+}
+
+.mode-direct::after {
+  opacity: 1;
+  background: linear-gradient(90deg, rgba(24, 144, 255, 0.00), var(--color-fast), rgba(24, 144, 255, 0.00));
+  filter: blur(0.5px);
+}
+
+@keyframes breathing-aura {
+  0% {
+    filter: blur(18px);
+    opacity: 0.75;
+  }
+  100% {
+    filter: blur(26px);
+    opacity: 1;
+  }
+}
+
+@keyframes breathing-strip {
+  0% { opacity: 0.55; }
+  100% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mode-reasoning::before,
+  .mode-reasoning::after {
+    animation: none;
+  }
 }

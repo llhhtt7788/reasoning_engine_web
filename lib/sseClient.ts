@@ -42,6 +42,7 @@ interface SSEDelta {
   content?: string;
   reasoning?: string;
   reasoning_content?: string;
+  agent?: string;
 }
 
 interface SSEChoice {
@@ -52,6 +53,10 @@ interface SSEChoice {
 interface SSEData {
   event?: string;
   choices?: SSEChoice[];
+  // common optional fields (some backends include them directly)
+  agent?: string;
+  llm_index?: number;
+  meta?: Record<string, unknown>;
   [k: string]: unknown;
 }
 
@@ -59,6 +64,14 @@ type SSEFrame = {
   event?: string;
   data?: string;
 };
+
+function asString(v: unknown): string | undefined {
+  return typeof v === 'string' ? v : undefined;
+}
+
+function asNumber(v: unknown): number | undefined {
+  return typeof v === 'number' ? v : undefined;
+}
 
 function extractObservability(payload: SSEData | Record<string, unknown> | null | undefined): ObservabilitySnapshot | null {
   if (!payload || typeof payload !== 'object') return null;
@@ -207,11 +220,8 @@ function parseSSEFrame(frameText: string): SSEFrame | null {
     if (!line) continue;
     if (line.startsWith('event:')) {
       eventName = line.slice('event:'.length).trim();
-      continue;
-    }
-    if (line.startsWith('data:')) {
+    } else if (line.startsWith('data:')) {
       dataLines.push(line.slice('data:'.length).trim());
-      continue;
     }
   }
 
@@ -317,6 +327,19 @@ export async function streamChat(
           onObservability(obs);
         }
 
+        // 0) Best-effort agent emission (some backends embed agent in many places)
+        // - explicit agent frame: { event: 'agent', agent: 'llm_fast' }
+        // - route frame may include agent
+        // - delta may include delta.agent
+        // - finish/meta frame may include meta.agent
+        const metaObj = (obj.meta && typeof obj.meta === 'object') ? obj.meta : undefined;
+        const agentFromObj = asString(obj.agent) ?? asString(metaObj?.agent);
+        const llmIndexFromObj = asNumber(obj.llm_index) ?? asNumber(metaObj?.llm_index);
+
+        if (agentFromObj && onAgent) {
+          onAgent({ event: 'agent', agent: agentFromObj, llm_index: llmIndexFromObj });
+        }
+
         // 1) route frame (usually first)
         if (obj.event === 'route' && onRoute) {
           onRoute(obj as unknown as ChatRouteEvent);
@@ -345,6 +368,11 @@ export async function streamChat(
         // 3) delta content
         const delta = obj.choices?.[0]?.delta;
         if (!delta) continue;
+
+        // Emit agent if embedded in delta
+        if (delta.agent && onAgent) {
+          onAgent({ event: 'agent', agent: delta.agent, llm_index: llmIndexFromObj });
+        }
 
         const content = delta.content || '';
         const reasoning = delta.reasoning || delta.reasoning_content || '';

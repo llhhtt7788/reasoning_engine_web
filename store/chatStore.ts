@@ -2,7 +2,12 @@
 import { create } from 'zustand';
 import { ChatMessage, LangGraphPathEvent, ChatRouteEvent, ObservabilitySnapshot } from '@/types/chat';
 
+type UiMode = 'idle' | 'reasoning' | 'direct';
+
 type ChatState = {
+  uiMode: UiMode;
+  setUiMode: (mode: UiMode) => void;
+
   messages: ChatMessage[];
   isStreaming: boolean;
   addMessage: (msg: ChatMessage) => void;
@@ -24,6 +29,9 @@ type ChatState = {
 };
 
 export const useChatStore = create<ChatState>((set) => ({
+  uiMode: 'idle',
+  setUiMode: (mode) => set({ uiMode: mode }),
+
   messages: [],
   isStreaming: false,
   addMessage: (msg) =>
