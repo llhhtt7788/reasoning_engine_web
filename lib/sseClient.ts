@@ -326,7 +326,8 @@ export async function streamChat(
         const obj = safeParseJson<SSEData>(frame.data);
         if (!obj) continue;
 
-        // Extract observability from ANY frame (route, agent, context_debug, or meta in delta)
+        // Always attempt to extract observability from ANY frame (route, agent, context_debug, or meta in delta)
+        // Some deployments now emit turn/session ids only via `event: context_debug`.
         const obs = extractObservability(obj);
         if (obs && onObservability) {
           onObservability(obs);
@@ -362,6 +363,7 @@ export async function streamChat(
         }
 
         // 2.5) context_debug frame (explicit event)
+        // We still parsed and extracted observability above; no delta content is expected in this frame.
         if (eventName === 'context_debug') {
           continue;
         }
