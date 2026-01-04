@@ -1,4 +1,6 @@
 // components/ChatContainer.tsx
+/* eslint-disable react-hooks/set-state-in-effect */
+
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -14,36 +16,9 @@ import {
     persistSessionId,
     resetSessionState,
 } from '@/lib/sessionManager';
+import { INFERENCE_CONFIG, inferMode } from '@/lib/responseInference';
 
 const MODE_FADE_DELAY_MS = 1400;
-
-function ModeBadge({ mode }: { mode: 'idle' | 'reasoning' | 'direct' }) {
-    if (mode === 'idle') return null;
-
-    const label = mode === 'reasoning' ? '深度思考' : '快速回答';
-    const cls = mode === 'reasoning'
-        ? 'border-red-200 bg-red-50 text-red-700'
-        : 'border-blue-200 bg-blue-50 text-blue-700';
-
-    return (
-        <span
-            className={[
-                'inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-medium',
-                cls,
-            ].join(' ')}
-            aria-label={`当前模式：${label}`}
-            title={`当前模式：${label}`}
-        >
-            <span
-                className={[
-                    'inline-block h-2 w-2 rounded-full',
-                    mode === 'reasoning' ? 'bg-red-500 animate-pulse' : 'bg-blue-500',
-                ].join(' ')}
-            />
-            {label}
-        </span>
-    );
-}
 
 function newClientSessionId(): string {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -62,6 +37,7 @@ export const ChatContainer: React.FC = () => {
         clearMessages,
         setLastAssistantRoute,
         mergeAssistantMeta,
+        mergeLastAssistantMeta,
         uiMode,
         setUiMode,
     } = useChatStore();
@@ -79,6 +55,11 @@ export const ChatContainer: React.FC = () => {
 
     const fadeTimerRef = useRef<number | null>(null);
 
+    // Per-request inference timers/state (no persistence)
+    const blankWaitTimerRef = useRef<number | null>(null);
+    const firstTokenSeenRef = useRef<boolean>(false);
+    const requestStartTsRef = useRef<number>(0);
+
     useEffect(() => {
         const el = document.getElementById('workbench-root');
         if (!el) return;
@@ -91,13 +72,20 @@ export const ChatContainer: React.FC = () => {
         }
     }, [uiMode]);
 
+    const cleanupTimers = () => {
+        if (fadeTimerRef.current) {
+            window.clearTimeout(fadeTimerRef.current);
+            fadeTimerRef.current = null;
+        }
+        if (blankWaitTimerRef.current) {
+            window.clearTimeout(blankWaitTimerRef.current);
+            blankWaitTimerRef.current = null;
+        }
+    };
+
     useEffect(() => {
-        return () => {
-            if (fadeTimerRef.current) {
-                window.clearTimeout(fadeTimerRef.current);
-                fadeTimerRef.current = null;
-            }
-        };
+        return cleanupTimers;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const scheduleFadeToIdle = () => {
@@ -111,12 +99,24 @@ export const ChatContainer: React.FC = () => {
         }, MODE_FADE_DELAY_MS);
     };
 
+    const clearInferenceTimers = () => {
+        if (blankWaitTimerRef.current) {
+            window.clearTimeout(blankWaitTimerRef.current);
+            blankWaitTimerRef.current = null;
+        }
+    };
+
     const handleSend = async (message: string) => {
         // New request cancels any pending fade-out.
         if (fadeTimerRef.current) {
             window.clearTimeout(fadeTimerRef.current);
             fadeTimerRef.current = null;
         }
+
+        // Cancel any pending inference timer from previous request.
+        clearInferenceTimers();
+        firstTokenSeenRef.current = false;
+        requestStartTsRef.current = Date.now();
 
         const ensuredConversationId = conversationId ?? getOrInitConversationId();
         setConversationId(ensuredConversationId);
@@ -136,7 +136,14 @@ export const ChatContainer: React.FC = () => {
             content: '',
             conversation_id: ensuredConversationId,
             session_id: ensuredSessionId,
+            meta: {},
         });
+
+        // If we see a noticeable blank wait before first token, infer "deep" and allow UI to show the hint.
+        blankWaitTimerRef.current = window.setTimeout(() => {
+            if (firstTokenSeenRef.current) return;
+            mergeLastAssistantMeta({ inferredMode: 'deep' });
+        }, INFERENCE_CONFIG.blankWaitHintMs);
 
         setStreaming(true);
 
@@ -156,14 +163,30 @@ export const ChatContainer: React.FC = () => {
                         setConversationId(route.conversation_id);
                     }
 
-                    // Some backends already decide agent in route.
-                    if (route.agent === 'llm_thinking') {
-                        setUiMode('reasoning');
-                    } else if (route.agent === 'llm_fast') {
-                        setUiMode('direct');
-                    }
+                    // v1: DO NOT set any UI mode based on backend routing or agent.
+                    // We only use response behavior inference at message level.
                 },
-                // NOTE: backend no longer emits langgraph_path on chat SSE; path is loaded via /api/v1/langgraph/path.
+                onFirstToken: (tsMs) => {
+                    if (firstTokenSeenRef.current) return;
+                    firstTokenSeenRef.current = true;
+                    clearInferenceTimers();
+
+                    const firstTokenLatencyMs = Math.max(0, tsMs - requestStartTsRef.current);
+                    const inferredMode = inferMode({
+                        requestStartTs: requestStartTsRef.current,
+                        firstTokenTs: tsMs,
+                        firstTokenLatencyMs,
+                        blankWaitFired: false,
+                    });
+
+                    mergeLastAssistantMeta({
+                        firstTokenLatencyMs,
+                        inferredMode,
+                        preHintUntilTs: inferredMode === 'deep'
+                            ? Date.now() + INFERENCE_CONFIG.minHintDisplayMs
+                            : undefined,
+                    });
+                },
                 onContent: (content) => {
                     updateLastAssistant(content);
                 },
@@ -172,16 +195,11 @@ export const ChatContainer: React.FC = () => {
                 },
                 onAgent: (agentEvt) => {
                     if (agentEvt.agent) {
+                        // Keep for internal observability panels only.
                         mergeAssistantMeta({
                             agent: agentEvt.agent,
                             llm_index: agentEvt.llm_index,
                         });
-
-                        if (agentEvt.agent === 'llm_thinking') {
-                            setUiMode('reasoning');
-                        } else if (agentEvt.agent === 'llm_fast') {
-                            setUiMode('direct');
-                        }
                     }
                 },
                 onObservability: (meta) => {
@@ -196,11 +214,19 @@ export const ChatContainer: React.FC = () => {
                     }
                 },
                 onError: (error) => {
+                    clearInferenceTimers();
                     updateLastAssistant(`\n\n请求失败: ${error.message}`);
                     setStreaming(false);
                     scheduleFadeToIdle();
                 },
                 onComplete: () => {
+                    clearInferenceTimers();
+
+                    // If we never saw a first token, still mark deep (best-effort) so styling stays consistent.
+                    if (!firstTokenSeenRef.current) {
+                        mergeLastAssistantMeta({ inferredMode: 'deep' });
+                    }
+
                     setStreaming(false);
                     scheduleFadeToIdle();
                 },
@@ -232,7 +258,6 @@ export const ChatContainer: React.FC = () => {
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <h1 className="text-2xl font-bold text-gray-950 tracking-tight">Med-Go 推理工作台</h1>
-                        <ModeBadge mode={uiMode} />
                     </div>
                     <button
                         onClick={handleClear}

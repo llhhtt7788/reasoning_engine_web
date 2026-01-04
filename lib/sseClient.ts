@@ -34,6 +34,10 @@ export type StreamCallbacks = {
   // Keep the callback optional for backward compatibility, but we won't invoke it here.
   onLangGraphPath?: (evt: LangGraphPathEvent) => void;
   onObservability?: (meta: ObservabilitySnapshot) => void;
+
+  /** Fired once when the first non-empty content token arrives (best-effort). */
+  onFirstToken?: (tsMs: number) => void;
+
   onError: (error: Error) => void;
   onComplete: () => void;
 };
@@ -242,7 +246,7 @@ export async function streamChat(
   callbacks: StreamCallbacks,
   context: ChatRequestContext
 ): Promise<void> {
-  const { onContent, onReasoning, onRoute, onAgent, onObservability, onError, onComplete } = callbacks;
+  const { onContent, onReasoning, onRoute, onAgent, onObservability, onFirstToken, onError, onComplete } = callbacks;
 
   try {
     // Convert chat history to the format expected by the API
@@ -298,6 +302,7 @@ export async function streamChat(
 
     const decoder = new TextDecoder();
     let buffer = '';
+    let firstTokenSeen = false;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -328,10 +333,6 @@ export async function streamChat(
         }
 
         // 0) Best-effort agent emission (some backends embed agent in many places)
-        // - explicit agent frame: { event: 'agent', agent: 'llm_fast' }
-        // - route frame may include agent
-        // - delta may include delta.agent
-        // - finish/meta frame may include meta.agent
         const metaObj = (obj.meta && typeof obj.meta === 'object') ? obj.meta : undefined;
         const agentFromObj = asString(obj.agent) ?? asString(metaObj?.agent);
         const llmIndexFromObj = asNumber(obj.llm_index) ?? asNumber(metaObj?.llm_index);
@@ -378,6 +379,10 @@ export async function streamChat(
         const reasoning = delta.reasoning || delta.reasoning_content || '';
 
         if (content) {
+          if (!firstTokenSeen) {
+            firstTokenSeen = true;
+            onFirstToken?.(Date.now());
+          }
           onContent(content);
         }
 

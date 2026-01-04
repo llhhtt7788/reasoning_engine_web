@@ -1,6 +1,6 @@
 // store/chatStore.ts
 import { create } from 'zustand';
-import { ChatMessage, LangGraphPathEvent, ChatRouteEvent, ObservabilitySnapshot } from '@/types/chat';
+import { ChatMessage, LangGraphPathEvent, ChatRouteEvent, ObservabilitySnapshot, MessageMeta } from '@/types/chat';
 
 type UiMode = 'idle' | 'reasoning' | 'direct';
 
@@ -14,6 +14,9 @@ type ChatState = {
   updateLastAssistant: (delta: string, reasoning?: string) => void;
   clearMessages: () => void;
   setStreaming: (streaming: boolean) => void;
+
+  // Frontend-only per-message meta for response inference
+  mergeLastAssistantMeta: (meta: MessageMeta) => void;
 
   // Context observability
   mergeAssistantMeta: (meta: ObservabilitySnapshot) => void;
@@ -41,9 +44,19 @@ export const useChatStore = create<ChatState>((set) => ({
       const messages = [...state.messages];
       const lastIndex = messages.length - 1;
       if (lastIndex >= 0 && messages[lastIndex].role === 'assistant') {
+        const prev = messages[lastIndex].content;
+        let nextDelta = delta;
+
+        // Streaming often delivers chunks that begin with "\n".
+        // If we already ended with a newline, avoid inserting an extra blank line,
+        // which can prematurely terminate GFM blocks (notably tables).
+        if (prev.endsWith('\n') && nextDelta.startsWith('\n')) {
+          nextDelta = nextDelta.replace(/^\n+/, '\n');
+        }
+
         messages[lastIndex] = {
           ...messages[lastIndex],
-          content: messages[lastIndex].content + delta,
+          content: prev + nextDelta,
           reasoning: reasoning
             ? (messages[lastIndex].reasoning || '') + reasoning
             : messages[lastIndex].reasoning,
@@ -53,6 +66,23 @@ export const useChatStore = create<ChatState>((set) => ({
     }),
   clearMessages: () => set({ messages: [] }),
   setStreaming: (streaming) => set({ isStreaming: streaming }),
+
+  mergeLastAssistantMeta: (meta) =>
+    set((state) => {
+      const messages = [...state.messages];
+      const lastIndex = messages.length - 1;
+      if (lastIndex >= 0 && messages[lastIndex].role === 'assistant') {
+        const current = messages[lastIndex];
+        messages[lastIndex] = {
+          ...current,
+          meta: {
+            ...(current.meta ?? {}),
+            ...meta,
+          },
+        };
+      }
+      return { messages };
+    }),
 
   mergeAssistantMeta: (meta) =>
     set((state) => {

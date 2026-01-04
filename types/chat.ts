@@ -52,6 +52,14 @@ export type ChatRouteEvent = ObservabilitySnapshot & {
   [k: string]: unknown;
 };
 
+export type MessageMeta = {
+  inferredMode?: 'quick' | 'deep';
+  firstTokenLatencyMs?: number;
+
+  /** If set, the UI may keep showing the pre-answer hint until this timestamp (ms). */
+  preHintUntilTs?: number;
+};
+
 export type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
@@ -69,4 +77,7 @@ export type ChatMessage = {
 
   // Observability snapshot for context debugging
   observability?: ObservabilitySnapshot;
+
+  // Frontend-only per-message metadata (NOT persisted, NOT sent to backend)
+  meta?: MessageMeta;
 };
