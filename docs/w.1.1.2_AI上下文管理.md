@@ -1,6 +1,6 @@
 # AI 上下文管理模块（前端集成 PRD 文档）
 
-**版本号：v1.3.2**（含路径可视化、上下文回溯、接口调试）
+**版本号：w.1.1.2**（含路径可视化、上下文回溯、接口调试）
 **适用对象**：Web 前端工程师
 **创建日期**：2026-01-02
 
@@ -37,15 +37,15 @@
 
 * **Query 参数（可选）**：
 
-    * `stream=true`：启用 SSE 返回（推荐）
-    * `trace=true`：是否记录执行路径信息
+  * `stream=true`：启用 SSE 返回（推荐）
+  * `trace=true`：是否记录执行路径信息
 
 * **返回类型（SSE）**：
 
-    * `event: route`：路径初始化
-    * `event: agent`：当前代理模型信息
-    * `event: langgraph_path`：路径节点变化（可视化）
-    * `event: token`：Token 流式响应
+  * `event: route`：路径初始化
+  * `event: agent`：当前代理模型信息
+  * `event: langgraph_path`：路径节点变化（可视化）
+  * `event: token`：Token 流式响应
 
 ### 2. 路径回放接口 `/api/v1/langgraph/path?turn_id=...`
 
@@ -107,7 +107,9 @@ interface DagEdge {
 | `turn_id`              | 当前语义轮唯一 ID          |
 | `memory_selected`      | 命中记忆条数              |
 | `context_tokens`       | Token 注入量           |
+| `tokens_used`          | 实际累计消耗 Token 数      |
 | `backend.summary`      | Redis / PG / memory |
+| `context_backends`     | 上下文来源明细（Redis/PG/memory） |
 | `has_session_summary`  | 是否拼接摘要段落            |
 | `agent_prompt_preview` | 本轮 LLM prompt 示例    |
 
@@ -175,3 +177,48 @@ Content-Type: application/json
 ---
 
 如需添加 mock 接口、接口类型定义文件（TS），可根据本文档继续扩展。
+
+---
+
+## 八、增补说明：Session ID 复用机制与前后端协同（v1.3.2+）
+
+### 8.1 前端会话状态管理
+
+| 属性 | 管理方式 | 说明 |
+| --- | --- | --- |
+| `conversation_id` | localStorage 持久化 | 每个主题唯一，不随刷新变化 |
+| `session_id` | sessionStorage（附带 30 分钟 TTL，同步到 localStorage 便于刷新后复用） | 未超时、未主动结束时必须复用 |
+
+* 刷新后应尝试读取最近的 `session_id`，若在 TTL 内则继续复用，否则置为 `null` 让后端创建新会话。
+* 前端需监听响应/流式帧中的 `meta.session_id`、`meta.conversation_id` 并实时更新本地存储。
+
+### 8.2 会话复用伪代码
+
+```ts
+const conversation_id = ensureConversationId();
+const session_id = loadReusableSessionId({ ttl: 30 * 60 * 1000 });
+
+POST /api/v1/chat/context {
+  conversation_id,
+  session_id, // 为空表示让后端创建
+  ...
+}
+
+// 在响应/流事件中：
+persistSessionId(response.meta.session_id);
+persistConversationId(response.meta.conversation_id);
+```
+
+### 8.3 后端协同要点（IDGuardNode）
+
+* 带 `session_id`：直接复用
+* 无 `session_id` 但带 `conversation_id`：
+  * 查询 `session_router:{user}:{conversation_id}` 是否存在最近 session
+  * 有则复用，无则新建并写回（TTL 1800 秒）
+* `/api/v1/chat/context` 响应必须返回实际使用的 `session_id`、`conversation_id`，并在缺失 `session_id` 时打印日志提示
+
+### 8.4 联调检查清单
+
+1. 连续多轮对话应保持同一 `session_id`
+2. 刷新页面后，如 TTL 未过期，仍可复用上次 `session_id`
+3. 若超时或手动结束对话，应主动清理本地 `session_id` 以便开启新会话

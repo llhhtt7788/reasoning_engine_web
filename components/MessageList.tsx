@@ -1,7 +1,7 @@
 // components/MessageList.tsx
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
@@ -20,9 +20,17 @@ export const MessageList: React.FC<MessageListProps> = ({ messages, showMetaPane
 
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Keep time-dependent UI (pre-hint expiry) out of render by using a lightweight ticker.
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, []);
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
@@ -38,13 +46,12 @@ export const MessageList: React.FC<MessageListProps> = ({ messages, showMetaPane
         const bubbleAlign = isUser ? 'ml-auto' : 'mr-auto';
 
         const inferredMode = message.meta?.inferredMode;
-        const now = Date.now();
         const showPreHint =
           !isUser
           && inferredMode === 'deep'
           && (
             (message.content ?? '').trim().length === 0
-            || (typeof message.meta?.preHintUntilTs === 'number' && now < message.meta.preHintUntilTs)
+            || (typeof message.meta?.preHintUntilTs === 'number' && nowMs < message.meta.preHintUntilTs)
           );
 
         const assistantBorder = !isUser
