@@ -35,7 +35,16 @@ export type ContextPolicy = {
 };
 
 /**
- * Context Policy 解析结果（v1.7.0+）
+ * Context Policy（PRD w.1.3.0 形状）
+ * context_debug.context_policy 直接是策略字段 + source
+ */
+export type ContextPolicyV170 = ContextPolicy & {
+  /** 策略来源："config" 或 "default_fallback" */
+  source: 'config' | 'default_fallback';
+};
+
+/**
+ * Context Policy 解析结果（legacy / 兼容旧后端形状）
  */
 export type ContextPolicyResolution = {
   /** 对应的意图名称 */
@@ -47,7 +56,7 @@ export type ContextPolicyResolution = {
 };
 
 /**
- * Context Execution 状态（v1.7.0+）
+ * Context Execution 状态（v1.7.0+ / PRD 形状）
  * 这是判断是否使用上下文的唯一真源（强约束 1）
  */
 export type ContextExecutionState = 'used' | 'skipped';
@@ -76,17 +85,20 @@ export type ContextExecution = {
 
 /**
  * Context Debug 完整结构（v1.7.0+）
- * 包含意图、策略和执行信息
+ * 对齐 PRD：context_policy 扁平；context_execution 为字符串；skip_reason 顶层字段
  */
 export type ContextDebugV170 = {
   // Intent 识别（新增）
   intent?: IntentInfo;
 
-  // Context Policy 解析（新增）
-  context_policy?: ContextPolicyResolution;
+  // Context Policy（PRD 形状，新增）
+  context_policy?: ContextPolicyV170;
 
-  // Context Execution 状态（新增，唯一真源）
-  context_execution?: ContextExecution;
+  // Context Execution 状态（PRD 形状，新增，唯一真源）
+  context_execution?: ContextExecutionState;
+
+  // 当 context_execution === "skipped" 时的原因（PRD 形状）
+  skip_reason?: 'intent_policy' | 'policy_config' | 'fallback';
 
   // 原有字段（保留向后兼容）
   embedding_used?: boolean;
@@ -181,21 +193,66 @@ export function getIntentInfo(snapshot?: ObservabilitySnapshotV170): IntentInfo 
 
 /**
  * 辅助函数：安全地获取 Context Policy
+ * 注意：只做结构兼容（legacy resolution -> flat），不做任何默认值推断。
  */
-export function getContextPolicy(snapshot?: ObservabilitySnapshotV170): ContextPolicyResolution | null {
-  return snapshot?.context_debug?.context_policy ?? null;
+export function getContextPolicy(snapshot?: ObservabilitySnapshotV170): ContextPolicyV170 | null {
+  const raw = snapshot?.context_debug?.context_policy as unknown;
+  if (!raw || typeof raw !== 'object') return null;
+
+  // PRD 形状（flat）
+  if (Object.prototype.hasOwnProperty.call(raw as Record<string, unknown>, 'use_context')) {
+    const r = raw as Record<string, unknown>;
+    const source = r['source'];
+    if (source !== 'config' && source !== 'default_fallback') return null;
+    return {
+      use_context: Boolean(r['use_context']),
+      recall_enabled: typeof r['recall_enabled'] === 'boolean' ? (r['recall_enabled'] as boolean) : undefined,
+      rerank_enabled: typeof r['rerank_enabled'] === 'boolean' ? (r['rerank_enabled'] as boolean) : undefined,
+      write_memory: typeof r['write_memory'] === 'boolean' ? (r['write_memory'] as boolean) : undefined,
+      keep_recent_turns:
+        typeof r['keep_recent_turns'] === 'number'
+          ? (r['keep_recent_turns'] as number)
+          : r['keep_recent_turns'] === null
+            ? null
+            : undefined,
+      source,
+    };
+  }
+
+  // legacy resolution 形状：{ intent, strategy, source }
+  const r = raw as Record<string, unknown>;
+  const strategy = r['strategy'];
+  const source = r['source'];
+  if (!strategy || typeof strategy !== 'object') return null;
+  if (source !== 'config' && source !== 'default_fallback') return null;
+
+  const s = strategy as Record<string, unknown>;
+  if (typeof s['use_context'] !== 'boolean') return null;
+
+  return {
+    use_context: s['use_context'] as boolean,
+    recall_enabled: typeof s['recall_enabled'] === 'boolean' ? (s['recall_enabled'] as boolean) : undefined,
+    rerank_enabled: typeof s['rerank_enabled'] === 'boolean' ? (s['rerank_enabled'] as boolean) : undefined,
+    write_memory: typeof s['write_memory'] === 'boolean' ? (s['write_memory'] as boolean) : undefined,
+    keep_recent_turns:
+      typeof s['keep_recent_turns'] === 'number'
+        ? (s['keep_recent_turns'] as number)
+        : s['keep_recent_turns'] === null
+          ? null
+          : undefined,
+    source,
+  };
 }
 
 /**
- * 辅助函数：安全地获取 Context Execution 状态
+ * 辅助函数：安全地获取 Context Execution 状态（PRD 形状）
  */
 export function getContextExecutionState(snapshot?: ObservabilitySnapshotV170): ContextExecutionState | null {
-  return snapshot?.context_debug?.context_execution?.state ?? null;
+  return snapshot?.context_debug?.context_execution ?? null;
 }
 
 /**
  * 辅助函数：判断是否跳过了上下文（强约束 1）
- * 这是判断 Context 状态的唯一正确方式
  */
 export function isContextSkipped(snapshot?: ObservabilitySnapshotV170): boolean {
   return getContextExecutionState(snapshot) === 'skipped';

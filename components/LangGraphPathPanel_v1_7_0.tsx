@@ -14,12 +14,30 @@ type LangGraphPathPanelV170Props = {
 
 /**
  * v1.7.0 新增的 Canonical 节点名称（强约束 3）
+ * 兼容后端灰度：同时接受 PRD PascalCase 与 legacy snake_case
  */
 const CANONICAL_NODE_NAMES = {
-  INTENT_CLASSIFIER: 'intent_classifier',
-  CONTEXT_POLICY: 'context_policy',
-  SKIP_CONTEXT: 'skip_context',
+  // PRD names
+  INTENT_CLASSIFIER_PRD: 'IntentClassifierNode',
+  CONTEXT_POLICY_PRD: 'ContextPolicyNode',
+  SKIP_CONTEXT_PRD: 'SkipContextNode',
+  // legacy names (历史 mock/旧 trace)
+  INTENT_CLASSIFIER_LEGACY: 'intent_classifier',
+  CONTEXT_POLICY_LEGACY: 'context_policy',
+  SKIP_CONTEXT_LEGACY: 'skip_context',
 } as const;
+
+function isIntentClassifierNode(name?: string): boolean {
+  return name === CANONICAL_NODE_NAMES.INTENT_CLASSIFIER_PRD || name === CANONICAL_NODE_NAMES.INTENT_CLASSIFIER_LEGACY;
+}
+
+function isContextPolicyNode(name?: string): boolean {
+  return name === CANONICAL_NODE_NAMES.CONTEXT_POLICY_PRD || name === CANONICAL_NODE_NAMES.CONTEXT_POLICY_LEGACY;
+}
+
+function isSkipContextNode(name?: string): boolean {
+  return name === CANONICAL_NODE_NAMES.SKIP_CONTEXT_PRD || name === CANONICAL_NODE_NAMES.SKIP_CONTEXT_LEGACY;
+}
 
 /**
  * 获取节点的视觉样式（v1.7.0）
@@ -28,28 +46,31 @@ const CANONICAL_NODE_NAMES = {
 function getNodeStyle(nodeName?: string): { color: string; bgColor: string; tooltip?: string } {
   if (!nodeName) return { color: 'text-gray-700', bgColor: 'bg-gray-100' };
 
-  switch (nodeName) {
-    case CANONICAL_NODE_NAMES.INTENT_CLASSIFIER:
-      return {
-        color: 'text-blue-700',
-        bgColor: 'bg-blue-100',
-        tooltip: 'Intent classification node',
-      };
-    case CANONICAL_NODE_NAMES.CONTEXT_POLICY:
-      return {
-        color: 'text-purple-700',
-        bgColor: 'bg-purple-100',
-        tooltip: 'Context policy resolution node',
-      };
-    case CANONICAL_NODE_NAMES.SKIP_CONTEXT:
-      return {
-        color: 'text-gray-700',
-        bgColor: 'bg-gray-100',
-        tooltip: 'Skipped context by intent policy',
-      };
-    default:
-      return { color: 'text-gray-700', bgColor: 'bg-gray-100' };
+  if (isIntentClassifierNode(nodeName)) {
+    return {
+      color: 'text-blue-700',
+      bgColor: 'bg-blue-100',
+      tooltip: 'Intent classification node',
+    };
   }
+
+  if (isContextPolicyNode(nodeName)) {
+    return {
+      color: 'text-purple-700',
+      bgColor: 'bg-purple-100',
+      tooltip: 'Context policy resolution node',
+    };
+  }
+
+  if (isSkipContextNode(nodeName)) {
+    return {
+      color: 'text-gray-700',
+      bgColor: 'bg-gray-100',
+      tooltip: 'Skipped by intent policy',
+    };
+  }
+
+  return { color: 'text-gray-700', bgColor: 'bg-gray-100' };
 }
 
 /**
@@ -109,9 +130,9 @@ export const LangGraphPathPanelV170: React.FC<LangGraphPathPanelV170Props> = ({
   const dag = useMemo(() => buildDagFromPathEvents(events), [events]);
 
   // v1.7.0: 检测是否包含新增的节点
-  const hasIntentClassifier = normalized.some((e) => e.node === CANONICAL_NODE_NAMES.INTENT_CLASSIFIER);
-  const hasContextPolicy = normalized.some((e) => e.node === CANONICAL_NODE_NAMES.CONTEXT_POLICY);
-  const hasSkipContext = normalized.some((e) => e.node === CANONICAL_NODE_NAMES.SKIP_CONTEXT);
+  const hasIntentClassifier = normalized.some((e) => isIntentClassifierNode(e.node));
+  const hasContextPolicy = normalized.some((e) => isContextPolicyNode(e.node));
+  const hasSkipContext = normalized.some((e) => isSkipContextNode(e.node));
   const hasNewNodes = hasIntentClassifier || hasContextPolicy || hasSkipContext;
 
   if (!turnId && (!events || events.length === 0)) return null;
@@ -182,9 +203,9 @@ export const LangGraphPathPanelV170: React.FC<LangGraphPathPanelV170Props> = ({
             <div className="rounded-lg border border-blue-200 bg-blue-50 p-2 text-[11px] text-blue-700">
               <div className="font-semibold mb-1">✨ Intent-aware 节点检测：</div>
               <div className="space-y-0.5">
-                {hasIntentClassifier && <div>• intent_classifier 节点已识别</div>}
-                {hasContextPolicy && <div>• context_policy 节点已识别</div>}
-                {hasSkipContext && <div>• skip_context 节点已识别</div>}
+                {hasIntentClassifier && <div>• IntentClassifierNode 节点已识别</div>}
+                {hasContextPolicy && <div>• ContextPolicyNode 节点已识别</div>}
+                {hasSkipContext && <div>• SkipContextNode 节点已识别</div>}
               </div>
             </div>
           )}
@@ -225,7 +246,7 @@ export const LangGraphPathPanelV170: React.FC<LangGraphPathPanelV170Props> = ({
                         {n.id}
                       </span>
                     );
-                  }).reduce((acc, el, idx, arr) => {
+                  }).reduce((acc, el, idx) => {
                     if (idx === 0) return [el];
                     return [...acc, ' → ', el];
                   }, [] as React.ReactNode[]) || '(none)'}

@@ -1,13 +1,14 @@
 'use client';
 
 import React from 'react';
-import type { IntentInfo, ContextPolicyResolution, ContextExecution } from '@/types/chat_v1_7_0';
+import type { IntentInfo, ContextPolicyV170, ContextExecutionState } from '@/types/chat_v1_7_0';
 import { getSkipReasonText } from '@/types/chat_v1_7_0';
 
 type IntentPolicyBlockProps = {
   intent?: IntentInfo;
-  contextPolicy?: ContextPolicyResolution;
-  contextExecution?: ContextExecution;
+  contextPolicy?: ContextPolicyV170;
+  contextExecution?: ContextExecutionState;
+  skipReason?: 'intent_policy' | 'policy_config' | 'fallback';
 };
 
 const Pill: React.FC<{
@@ -56,6 +57,7 @@ export const IntentPolicyBlock: React.FC<IntentPolicyBlockProps> = ({
   intent,
   contextPolicy,
   contextExecution,
+  skipReason,
 }) => {
   // 处理 Intent 缺失（降级规则 1）
   if (!intent) {
@@ -89,10 +91,12 @@ export const IntentPolicyBlock: React.FC<IntentPolicyBlockProps> = ({
   }
 
   // 正常情况：Intent 和 Policy 都存在
-  const useContext = contextPolicy?.strategy?.use_context ?? false;
-  const policySource = contextPolicy?.source ?? 'unknown';
-  const executionState = contextExecution?.state;
-  const skipReason = contextExecution?.skip_reason;
+  const policy = contextPolicy; // TS narrowing helper
+  if (!policy) return null;
+
+  const useContext = policy.use_context;
+  const policySource = policy.source;
+  const executionState = contextExecution;
 
   return (
     <div className="space-y-3">
@@ -140,11 +144,11 @@ export const IntentPolicyBlock: React.FC<IntentPolicyBlockProps> = ({
               )
             }
           />
-          {contextPolicy.strategy.recall_enabled !== undefined && (
+          {policy.recall_enabled !== undefined && (
             <FieldRow
               label="recall_enabled"
               value={
-                contextPolicy.strategy.recall_enabled ? (
+                policy.recall_enabled ? (
                   <Pill tone="green">ON</Pill>
                 ) : (
                   <Pill tone="red">OFF</Pill>
@@ -152,11 +156,11 @@ export const IntentPolicyBlock: React.FC<IntentPolicyBlockProps> = ({
               }
             />
           )}
-          {contextPolicy.strategy.rerank_enabled !== undefined && (
+          {policy.rerank_enabled !== undefined && (
             <FieldRow
               label="rerank_enabled"
               value={
-                contextPolicy.strategy.rerank_enabled ? (
+                policy.rerank_enabled ? (
                   <Pill tone="green">ON</Pill>
                 ) : (
                   <Pill tone="red">OFF</Pill>
@@ -164,11 +168,11 @@ export const IntentPolicyBlock: React.FC<IntentPolicyBlockProps> = ({
               }
             />
           )}
-          {contextPolicy.strategy.write_memory !== undefined && (
+          {policy.write_memory !== undefined && (
             <FieldRow
               label="write_memory"
               value={
-                contextPolicy.strategy.write_memory ? (
+                policy.write_memory ? (
                   <Pill tone="green">ON</Pill>
                 ) : (
                   <Pill tone="red">OFF</Pill>
@@ -176,14 +180,11 @@ export const IntentPolicyBlock: React.FC<IntentPolicyBlockProps> = ({
               }
             />
           )}
-          <FieldRow
-            label="source"
-            value={<Pill tone="gray">{policySource}</Pill>}
-          />
+          <FieldRow label="source" value={<Pill tone="gray">{policySource}</Pill>} />
         </div>
       </div>
 
-      {/* Execution 结论（降级规则 3） */}
+      {/* Execution 结论 */}
       {executionState && (
         <div>
           <SectionLabel title="Execution" />

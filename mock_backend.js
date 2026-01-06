@@ -82,7 +82,8 @@ function buildContextDebug({ turnId, sessionId, conversationId }) {
 
   const injected_memory_ids = memories.filter((m) => m.injected).map((m) => m.memory_id);
 
-  // Minimal, stable contract for w.1.0.0
+  // v1.7.0 / w.1.3.0: 正式契约字段（前端不推断）
+  // 这里用 mock 展示一次“skipped by intent_policy”的情况；需要对照后端实现输出。
   const context_debug = {
     // IDs for replay
     turn_id: turnId,
@@ -95,7 +96,21 @@ function buildContextDebug({ turnId, sessionId, conversationId }) {
     llm_index: 0,
     task_type: 'diagnosis',
 
-    // Summary required
+    // === v1.7.0 new: explicit decision fields ===
+    intent: {
+      name: 'qa_stateless',
+      confidence: 0.91,
+    },
+    context_policy: {
+      use_context: false,
+      recall_enabled: false,
+      write_memory: false,
+      source: 'config',
+    },
+    context_execution: 'skipped',
+    skip_reason: 'intent_policy',
+
+    // Summary required (legacy fields retained)
     embedding_used: true,
     rerank_used: true,
     recalled_count: memories.length,
@@ -170,140 +185,168 @@ const server = http.createServer((req, res) => {
     const sampleResponse = {
       turn_id: turnId,
       count: 40,
-      events: [
-        {
-          timestamp: '2026-01-02T16:22:38.257952',
-          graph: 'context_chat',
-          run_id: '019b7dcd-31b2-7802-9cb7-336168ada2a1',
-          node: 'LangGraph',
-          edge: 'on_chain_start',
-          extra: {
-            llm_index: 0,
-            agent: 'llm_fast',
-            event_count: 1,
+      events:
+        [
+          // --- v1.7.0 intent-aware branch (PRD node names) ---
+          {
+            timestamp: '2026-01-02T16:22:38.100000',
+            graph: 'context_chat',
+            run_id: 'run_intent_001',
+            node: 'IntentClassifierNode',
+            edge: 'on_chain_start',
+            extra: { agent: 'llm_fast', llm_index: 0 },
           },
-        },
-        {
-          timestamp: '2026-01-02T16:22:38.258958',
-          graph: 'context_chat',
-          run_id: '019b7dcd-31b3-7d63-b059-8d3bc139da9d',
-          node: 'context_admission',
-          edge: 'on_chain_start',
-          extra: {
-            llm_index: 0,
-            agent: 'llm_fast',
-            event_count: 2,
+          {
+            timestamp: '2026-01-02T16:22:38.120000',
+            graph: 'context_chat',
+            run_id: 'run_policy_001',
+            node: 'ContextPolicyNode',
+            edge: 'on_chain_start',
+            extra: { agent: 'llm_fast', llm_index: 0 },
           },
-        },
-        {
-          timestamp: '2026-01-02T16:22:38.262958',
-          graph: 'context_chat',
-          run_id: '019b7dcd-31b3-7d63-b059-8d3bc139da9d',
-          node: 'context_admission',
-          edge: 'on_chain_end',
-          extra: {
-            llm_index: 0,
-            agent: 'llm_fast',
-            event_count: 3,
+          {
+            timestamp: '2026-01-02T16:22:38.140000',
+            graph: 'context_chat',
+            run_id: 'run_skip_001',
+            node: 'SkipContextNode',
+            edge: 'skip_context',
+            extra: { reason: 'intent_policy' },
           },
-        },
-        {
-          timestamp: '2026-01-02T16:22:38.268120',
-          graph: 'context_chat',
-          run_id: '019b7dcd-31b4-7d63-b059-8d3bc139da9d',
-          node: 'embedding',
-          edge: 'on_chain_start',
-          extra: {
-            llm_index: 0,
-            agent: 'llm_fast',
-            event_count: 4,
+
+          // --- legacy / demo events ---
+          {
+            timestamp: '2026-01-02T16:22:38.257952',
+            graph: 'context_chat',
+            run_id: '019b7dcd-31b2-7802-9cb7-336168ada2a1',
+            node: 'LangGraph',
+            edge: 'on_chain_start',
+            extra: {
+              llm_index: 0,
+              agent: 'llm_fast',
+              event_count: 1,
+            },
           },
-        },
-        {
-          timestamp: '2026-01-02T16:22:38.290120',
-          graph: 'context_chat',
-          run_id: '019b7dcd-31b4-7d63-b059-8d3bc139da9d',
-          node: 'embedding',
-          edge: 'on_chain_end',
-          extra: {
-            llm_index: 0,
-            agent: 'llm_fast',
-            event_count: 5,
+          {
+            timestamp: '2026-01-02T16:22:38.258958',
+            graph: 'context_chat',
+            run_id: '019b7dcd-31b3-7d63-b059-8d3bc139da9d',
+            node: 'context_admission',
+            edge: 'on_chain_start',
+            extra: {
+              llm_index: 0,
+              agent: 'llm_fast',
+              event_count: 2,
+            },
           },
-        },
-        {
-          timestamp: '2026-01-02T16:22:38.292120',
-          graph: 'context_chat',
-          run_id: '019b7dcd-31b5-7d63-b059-8d3bc139da9d',
-          node: 'recall',
-          edge: 'on_chain_start',
-          extra: {
-            llm_index: 0,
-            agent: 'llm_fast',
-            event_count: 6,
+          {
+            timestamp: '2026-01-02T16:22:38.262958',
+            graph: 'context_chat',
+            run_id: '019b7dcd-31b3-7d63-b059-8d3bc139da9d',
+            node: 'context_admission',
+            edge: 'on_chain_end',
+            extra: {
+              llm_index: 0,
+              agent: 'llm_fast',
+              event_count: 3,
+            },
           },
-        },
-        {
-          timestamp: '2026-01-02T16:22:38.320120',
-          graph: 'context_chat',
-          run_id: '019b7dcd-31b5-7d63-b059-8d3bc139da9d',
-          node: 'recall',
-          edge: 'on_chain_end',
-          extra: {
-            llm_index: 0,
-            agent: 'llm_fast',
-            event_count: 7,
+          {
+            timestamp: '2026-01-02T16:22:38.268120',
+            graph: 'context_chat',
+            run_id: '019b7dcd-31b4-7d63-b059-8d3bc139da9d',
+            node: 'embedding',
+            edge: 'on_chain_start',
+            extra: {
+              llm_index: 0,
+              agent: 'llm_fast',
+              event_count: 4,
+            },
           },
-        },
-        {
-          timestamp: '2026-01-02T16:22:38.321120',
-          graph: 'context_chat',
-          run_id: '019b7dcd-31b6-7d63-b059-8d3bc139da9d',
-          node: 'rerank',
-          edge: 'on_chain_start',
-          extra: {
-            llm_index: 0,
-            agent: 'llm_fast',
-            event_count: 8,
+          {
+            timestamp: '2026-01-02T16:22:38.290120',
+            graph: 'context_chat',
+            run_id: '019b7dcd-31b4-7d63-b059-8d3bc139da9d',
+            node: 'embedding',
+            edge: 'on_chain_end',
+            extra: {
+              llm_index: 0,
+              agent: 'llm_fast',
+              event_count: 5,
+            },
           },
-        },
-        {
-          timestamp: '2026-01-02T16:22:38.349120',
-          graph: 'context_chat',
-          run_id: '019b7dcd-31b6-7d63-b059-8d3bc139da9d',
-          node: 'rerank',
-          edge: 'on_chain_end',
-          extra: {
-            llm_index: 0,
-            agent: 'llm_fast',
-            event_count: 9,
+          {
+            timestamp: '2026-01-02T16:22:38.292120',
+            graph: 'context_chat',
+            run_id: '019b7dcd-31b5-7d63-b059-8d3bc139da9d',
+            node: 'recall',
+            edge: 'on_chain_start',
+            extra: {
+              llm_index: 0,
+              agent: 'llm_fast',
+              event_count: 6,
+            },
           },
-        },
-        {
-          timestamp: '2026-01-02T16:22:38.352120',
-          graph: 'context_chat',
-          run_id: '019b7dcd-31b7-7d63-b059-8d3bc139da9d',
-          node: 'assembly',
-          edge: 'on_chain_start',
-          extra: {
-            llm_index: 0,
-            agent: 'llm_fast',
-            event_count: 10,
+          {
+            timestamp: '2026-01-02T16:22:38.320120',
+            graph: 'context_chat',
+            run_id: '019b7dcd-31b5-7d63-b059-8d3bc139da9d',
+            node: 'recall',
+            edge: 'on_chain_end',
+            extra: {
+              llm_index: 0,
+              agent: 'llm_fast',
+              event_count: 7,
+            },
           },
-        },
-        {
-          timestamp: '2026-01-02T16:22:38.360120',
-          graph: 'context_chat',
-          run_id: '019b7dcd-31b7-7d63-b059-8d3bc139da9d',
-          node: 'assembly',
-          edge: 'on_chain_end',
-          extra: {
-            llm_index: 0,
-            agent: 'llm_fast',
-            event_count: 11,
+          {
+            timestamp: '2026-01-02T16:22:38.321120',
+            graph: 'context_chat',
+            run_id: '019b7dcd-31b6-7d63-b059-8d3bc139da9d',
+            node: 'rerank',
+            edge: 'on_chain_start',
+            extra: {
+              llm_index: 0,
+              agent: 'llm_fast',
+              event_count: 8,
+            },
           },
-        },
-      ],
+          {
+            timestamp: '2026-01-02T16:22:38.349120',
+            graph: 'context_chat',
+            run_id: '019b7dcd-31b6-7d63-b059-8d3bc139da9d',
+            node: 'rerank',
+            edge: 'on_chain_end',
+            extra: {
+              llm_index: 0,
+              agent: 'llm_fast',
+              event_count: 9,
+            },
+          },
+          {
+            timestamp: '2026-01-02T16:22:38.352120',
+            graph: 'context_chat',
+            run_id: '019b7dcd-31b7-7d63-b059-8d3bc139da9d',
+            node: 'assembly',
+            edge: 'on_chain_start',
+            extra: {
+              llm_index: 0,
+              agent: 'llm_fast',
+              event_count: 10,
+            },
+          },
+          {
+            timestamp: '2026-01-02T16:22:38.360120',
+            graph: 'context_chat',
+            run_id: '019b7dcd-31b7-7d63-b059-8d3bc139da9d',
+            node: 'assembly',
+            edge: 'on_chain_end',
+            extra: {
+              llm_index: 0,
+              agent: 'llm_fast',
+              event_count: 11,
+            },
+          },
+        ],
       context_debug,
     };
 
