@@ -164,12 +164,12 @@ formula: 0.5R + 0.2V + 0.2I + 0.1T
 
 ### 6.4 每个 Step 展示字段
 
-| 字段            | 来源                 |
-| ------------- | ------------------ |
-| stage         | step.stage         |
-| input_count   | step.input_count   |
-| output_count  | step.output_count  |
-| rule / params | step.rule / params |
+  | 字段            | 来源                 |
+  | ------------- | ------------------ |
+  | stage         | step.stage         |
+  | input_count   | step.input_count   |
+  | output_count  | step.output_count  |
+  | rule / params | step.rule / params |
 
 📌 **不展示任何文本内容**
 
@@ -198,12 +198,12 @@ context_debug.context_backends
 
 ### 7.3 颜色规范
 
-| Status      | 颜色 |
-| ----------- | -- |
-| HEALTHY     | 绿色 |
-| DEGRADED    | 黄色 |
-| UNAVAILABLE | 红色 |
-| unknown     | 灰色 |
+| Status      | 颜色  |
+| ----------- |-----|
+| HEALTHY     | 绿色  |
+| DEGRADED    | 黄色  |
+| UNAVAILABLE | 红色  |
+| unknown     | 灰色  |
 
 ---
 
