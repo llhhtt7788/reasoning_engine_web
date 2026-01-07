@@ -5,6 +5,9 @@ import type { ObservabilitySnapshotV170 } from '@/types/chat_v1_7_0';
 import {
   getIntentInfo,
   getContextPolicy,
+  getContextExecutionState,
+  getContextExecutionDetails,
+  getSkipReason,
   isContextSkipped,
 } from '@/types/chat_v1_7_0';
 import { IntentPolicyBlock } from './IntentPolicyBlock';
@@ -158,8 +161,10 @@ export const ContextDebugPanelV170: React.FC<ContextDebugPanelV170Props> = ({
 
   const intentInfo = getIntentInfo(snapshot) ?? undefined;
   const contextPolicy = getContextPolicy(snapshot) ?? undefined;
-  const contextExecution = contextDebug?.context_execution;
-  const skipReason = contextDebug?.skip_reason;
+  // v1.8.0 兼容：使用辅助函数获取 context_execution 状态和详情
+  const contextExecution = getContextExecutionState(snapshot);
+  const contextExecutionDetails = getContextExecutionDetails(snapshot);
+  const skipReason = getSkipReason(snapshot);
 
   // 强约束 1：使用 context_execution 作为唯一真源
   const contextSkipped = isContextSkipped(snapshot);
@@ -267,7 +272,8 @@ export const ContextDebugPanelV170: React.FC<ContextDebugPanelV170Props> = ({
             <IntentPolicyBlock
               intent={intentInfo ?? undefined}
               contextPolicy={contextPolicy ?? undefined}
-              contextExecution={contextExecution}
+              contextExecution={contextExecution ?? undefined}
+              contextExecutionDetails={contextExecutionDetails}
               skipReason={skipReason}
             />
           </div>

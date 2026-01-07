@@ -1,6 +1,7 @@
 // types/chat_v1_7_0.ts
 // v1.7.0 (w.1.3.0) 数据模型扩展
 // 包含 Intent、Policy 和 Context Execution 的强类型定义
+// v1.8.0 更新：兼容 context_execution 对象格式
 
 /**
  * Intent 识别结果（v1.7.0+）
@@ -62,7 +63,22 @@ export type ContextPolicyResolution = {
 export type ContextExecutionState = 'used' | 'skipped';
 
 /**
- * Context Execution 详情（v1.7.0+）
+ * Context Execution 详情（v1.8.0 对象格式）
+ * 后端返回的完整 context_execution 对象
+ */
+export type ContextExecutionV180 = {
+  /** 执行模式："used" 或 "skipped" */
+  mode: ContextExecutionState;
+  /** 当 mode === "skipped" 时的原因 */
+  skip_reason?: string | null;
+  /** 保留的最近轮次数配置 */
+  keep_recent_turns?: number | null;
+  /** 是否跳过了上下文（布尔值，与 mode 对应） */
+  skipped: boolean;
+};
+
+/**
+ * Context Execution 详情（v1.7.0 旧格式，保留向后兼容）
  */
 export type ContextExecution = {
   /** 执行状态："used" 或 "skipped" */
@@ -84,8 +100,8 @@ export type ContextExecution = {
 };
 
 /**
- * Context Debug 完整结构（v1.7.0+）
- * 对齐 PRD：context_policy 扁平；context_execution 为字符串；skip_reason 顶层字段
+ * Context Debug 完整结构（v1.7.0+，兼容 v1.8.0）
+ * 对齐 PRD：context_policy 扁平；context_execution 可为字符串或对象
  */
 export type ContextDebugV170 = {
   // Intent 识别（新增）
@@ -94,10 +110,12 @@ export type ContextDebugV170 = {
   // Context Policy（PRD 形状，新增）
   context_policy?: ContextPolicyV170;
 
-  // Context Execution 状态（PRD 形状，新增，唯一真源）
-  context_execution?: ContextExecutionState;
+  // Context Execution 状态
+  // v1.7.0: 字符串 "used" | "skipped"
+  // v1.8.0: 对象 { mode, skip_reason, keep_recent_turns, skipped }
+  context_execution?: ContextExecutionState | ContextExecutionV180;
 
-  // 当 context_execution === "skipped" 时的原因（PRD 形状）
+  // 当 context_execution === "skipped" 时的原因（v1.7.0 PRD 形状，顶层）
   skip_reason?: 'intent_policy' | 'policy_config' | 'fallback';
 
   // 原有字段（保留向后兼容）
@@ -245,10 +263,89 @@ export function getContextPolicy(snapshot?: ObservabilitySnapshotV170): ContextP
 }
 
 /**
- * 辅助函数：安全地获取 Context Execution 状态（PRD 形状）
+ * 辅助函数：安全地获取 Context Execution 状态
+ * 兼容 v1.7.0（字符串）和 v1.8.0（对象）格式
  */
 export function getContextExecutionState(snapshot?: ObservabilitySnapshotV170): ContextExecutionState | null {
-  return snapshot?.context_debug?.context_execution ?? null;
+  const raw = snapshot?.context_debug?.context_execution;
+
+  // v1.7.0 格式：直接是字符串 "used" 或 "skipped"
+  if (raw === 'used' || raw === 'skipped') {
+    return raw;
+  }
+
+  // v1.8.0 格式：对象 { mode: "used", skipped: false, ... }
+  if (typeof raw === 'object' && raw !== null) {
+    const obj = raw as Record<string, unknown>;
+    // 优先使用 mode 字段
+    if (obj.mode === 'used' || obj.mode === 'skipped') {
+      return obj.mode as ContextExecutionState;
+    }
+    // 回退到 skipped 布尔值
+    if (typeof obj.skipped === 'boolean') {
+      return obj.skipped ? 'skipped' : 'used';
+    }
+  }
+
+  return null;
+}
+
+/**
+ * 辅助函数：获取完整的 Context Execution 详情（v1.8.0 格式）
+ * 返回标准化的对象，无论后端返回字符串还是对象
+ */
+export function getContextExecutionDetails(snapshot?: ObservabilitySnapshotV170): ContextExecutionV180 | null {
+  const raw = snapshot?.context_debug?.context_execution;
+
+  // v1.7.0 格式：字符串，转换为对象
+  if (raw === 'used' || raw === 'skipped') {
+    return {
+      mode: raw,
+      skip_reason: snapshot?.context_debug?.skip_reason ?? null,
+      keep_recent_turns: null,
+      skipped: raw === 'skipped',
+    };
+  }
+
+  // v1.8.0 格式：对象
+  if (typeof raw === 'object' && raw !== null) {
+    const obj = raw as Record<string, unknown>;
+    const mode = obj.mode === 'used' || obj.mode === 'skipped'
+      ? obj.mode as ContextExecutionState
+      : (obj.skipped === true ? 'skipped' : 'used');
+
+    return {
+      mode,
+      skip_reason: typeof obj.skip_reason === 'string' ? obj.skip_reason : null,
+      keep_recent_turns: typeof obj.keep_recent_turns === 'number' ? obj.keep_recent_turns : null,
+      skipped: mode === 'skipped',
+    };
+  }
+
+  return null;
+}
+
+/**
+ * 辅助函数：获取 skip_reason
+ * 兼容 v1.7.0（顶层）和 v1.8.0（context_execution 内）格式
+ */
+export function getSkipReason(snapshot?: ObservabilitySnapshotV170): string | null {
+  // v1.7.0 格式：顶层 skip_reason
+  const topLevel = snapshot?.context_debug?.skip_reason;
+  if (typeof topLevel === 'string') {
+    return topLevel;
+  }
+
+  // v1.8.0 格式：context_execution.skip_reason
+  const raw = snapshot?.context_debug?.context_execution;
+  if (typeof raw === 'object' && raw !== null) {
+    const obj = raw as Record<string, unknown>;
+    if (typeof obj.skip_reason === 'string') {
+      return obj.skip_reason;
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -268,11 +365,14 @@ export function isContextUsed(snapshot?: ObservabilitySnapshotV170): boolean {
 /**
  * 辅助函数：获取 Skip 原因的 UI 文案映射（强约束 2）
  */
-export function getSkipReasonText(skipReason?: string): string {
+export function getSkipReasonText(skipReason?: string | null): string {
+  if (!skipReason) return 'Context skipped';
+
   const reasonMap: Record<string, string> = {
     'intent_policy': 'Skipped due to intent policy',
     'policy_config': 'Skipped by configuration',
+    'policy_use_context_false': 'Skipped by policy (use_context=false)',
     'fallback': 'Skipped by system fallback',
   };
-  return reasonMap[skipReason ?? ''] ?? 'Context skipped';
+  return reasonMap[skipReason] ?? `Context skipped: ${skipReason}`;
 }
