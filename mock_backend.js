@@ -82,8 +82,7 @@ function buildContextDebug({ turnId, sessionId, conversationId }) {
 
   const injected_memory_ids = memories.filter((m) => m.injected).map((m) => m.memory_id);
 
-  // v1.7.0 / w.1.3.0: 正式契约字段（前端不推断）
-  // 这里用 mock 展示一次“skipped by intent_policy”的情况；需要对照后端实现输出。
+  // v1.7.2 / w.1.3.1: stable contract fields (frontend should not infer)
   const context_debug = {
     // IDs for replay
     turn_id: turnId,
@@ -96,19 +95,29 @@ function buildContextDebug({ turnId, sessionId, conversationId }) {
     llm_index: 0,
     task_type: 'diagnosis',
 
-    // === v1.7.0 new: explicit decision fields ===
+    // === v1.7.2 stable: explicit decision fields ===
     intent: {
-      name: 'qa_stateless',
-      confidence: 0.91,
+      type: 'qa_stateless',
+      confidence: 0.62,
+      source: 'fallback',
+      model: 'llm_fast',
     },
-    context_policy: {
+    context_strategy: {
       use_context: false,
       recall_enabled: false,
-      write_memory: false,
+      rerank_enabled: false,
+      write_memory: 'off',
+      keep_recent_turns: 1,
       source: 'config',
     },
-    context_execution: 'skipped',
-    skip_reason: 'intent_policy',
+    context_execution: {
+      mode: 'skipped',
+      skip_reason: 'policy_use_context_false',
+      keep_recent_turns: 1,
+    },
+
+    // v1.7.2 must
+    memory_selected: [],
 
     // Summary required (legacy fields retained)
     embedding_used: true,
@@ -149,8 +158,7 @@ function buildContextDebug({ turnId, sessionId, conversationId }) {
     agent_prompt_preview: 'System: You are a helpful medical assistant...\nUser: ...',
 
     // Compatibility: keep deprecated field for older UI/docs
-    // (do not rely on this in w.1.0.0 UI)
-    memory_selected: injected_memory_ids.length,
+    memory_selected_count: injected_memory_ids.length,
   };
 
   return context_debug;

@@ -5,6 +5,7 @@ import { useChatStore } from '@/store/chatStore';
 import { aggregateNodeRuns } from '@/lib/langgraphRuns';
 import { LangGraphTimeline } from './LangGraphTimeline';
 import { fetchLangGraphPathReplay } from '@/lib/langgraphReplay';
+import { LangGraphPathPanelV170 } from './LangGraphPathPanel_v1_7_0';
 
 export const DecisionPathSidebar: React.FC = () => {
   const { messages, selectedDecisionNode, setSelectedDecisionNode, setLangGraphPathEvents } = useChatStore();
@@ -79,21 +80,42 @@ export const DecisionPathSidebar: React.FC = () => {
             暂无路径事件。
           </div>
         ) : (
-          <LangGraphTimeline
-            runs={runs}
-            selectedRunKey={
-              selectedDecisionNode?.runId && selectedDecisionNode?.node
-                ? `${selectedDecisionNode.runId}-${selectedDecisionNode.node}`
-                : null
-            }
-            onSelectRun={(run) =>
-              setSelectedDecisionNode(
-                run
-                  ? { runId: run.run_id, node: run.node, agent: run.agent ?? undefined }
+          <>
+            <LangGraphTimeline
+              runs={runs}
+              selectedRunKey={
+                selectedDecisionNode?.runId && selectedDecisionNode?.node
+                  ? `${selectedDecisionNode.runId}-${selectedDecisionNode.node}`
                   : null
-              )
-            }
-          />
+              }
+              onSelectRun={(run) =>
+                setSelectedDecisionNode(
+                  run
+                    ? { runId: run.run_id, node: run.node, agent: run.agent ?? undefined }
+                    : null
+                )
+              }
+            />
+
+            <LangGraphPathPanelV170
+              turnId={current?.turn_id}
+              sessionId={current?.session_id}
+              conversationId={current?.conversation_id}
+              events={current?.langgraph_path}
+              onReplayAction={async () => {
+                if (!current?.turn_id) return;
+                const events = await fetchLangGraphPathReplay({
+                  turnId: current.turn_id,
+                  conversationId: current?.conversation_id,
+                  sessionId: current?.session_id,
+                  maxLines: 5000,
+                });
+                if (events.length > 0) {
+                  setLangGraphPathEvents(current.turn_id, events);
+                }
+              }}
+            />
+          </>
         )}
       </div>
     </aside>

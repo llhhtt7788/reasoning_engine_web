@@ -2,6 +2,9 @@
 
 import React, { useMemo, useState } from 'react';
 import type { ObservabilitySnapshot } from '@/types/chat';
+import { isV172Contract, getExecutionMode } from '@/types/contextDebug_v1_7_2';
+import { IntentPolicyBlock } from './IntentPolicyBlock';
+import { useIdentityStore } from '@/store/identityStore';
 
 type ContextDebugPanelProps = {
   turnId?: string;
@@ -202,28 +205,28 @@ function getSelectionReason(m: MemoryLike): {
   return out;
 }
 
-function getContextSummaryHint(params: {
-  embeddingUsed: boolean | null;
-  recalledCount: number | null;
-  injectedCount: number;
-}): { tone: 'amber' | 'orange' | 'green'; text: string } | null {
-  const { embeddingUsed, recalledCount, injectedCount } = params;
+const CopyButton: React.FC<{ value: string; label?: string }> = ({ value, label = 'Copy' }) => {
+  const [copied, setCopied] = useState(false);
 
-  // PRD fixed rules only. If required facts are missing, render nothing.
-  if (embeddingUsed === true && recalledCount === 0) {
-    return { tone: 'amber', text: '无可用记忆（Embedding 命中但无召回结果）' };
-  }
-
-  if (recalledCount !== null && recalledCount > 0 && injectedCount === 0) {
-    return { tone: 'orange', text: '记忆被全部过滤（可能是阈值或权重问题）' };
-  }
-
-  if (injectedCount > 0) {
-    return { tone: 'green', text: '上下文注入生效' };
-  }
-
-  return null;
-}
+  return (
+    <button
+      type="button"
+      className="text-[11px] px-2 py-1 rounded-md border border-gray-200 bg-white hover:bg-gray-50 text-gray-700"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(value);
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1200);
+        } catch {
+          // ignore
+        }
+      }}
+      title={value}
+    >
+      {copied ? 'Copied' : label}
+    </button>
+  );
+};
 
 export const ContextDebugPanel: React.FC<ContextDebugPanelProps> = ({
   turnId,
@@ -235,6 +238,20 @@ export const ContextDebugPanel: React.FC<ContextDebugPanelProps> = ({
 }) => {
   const snapshot = observability;
   const shouldRender = Boolean(turnId || snapshot);
+
+  const idConversationId = useIdentityStore((s) => s.conversationId);
+  const idUserId = useIdentityStore((s) => s.userId);
+  const idSessionId = useIdentityStore((s) => s.sessionId);
+  const setConversationIdStore = useIdentityStore((s) => s.setConversationId);
+
+  const [draftConversationId, setDraftConversationId] = useState(idConversationId);
+
+  // IMPORTANT: do not early-return before hooks are called (eslint react-hooks/rules-of-hooks).
+
+  // keep draft in sync when store changes elsewhere
+  React.useEffect(() => {
+    setDraftConversationId(idConversationId);
+  }, [idConversationId]);
 
   const taskType =
     snapshot?.task_type ??
@@ -248,8 +265,11 @@ export const ContextDebugPanel: React.FC<ContextDebugPanelProps> = ({
   const isAgentHighlighted = highlightAgent && snapshot?.agent && highlightAgent === snapshot.agent;
   const shouldHighlightContext = Boolean(highlightNodeName);
 
-  // w.1.x: read from context_debug.* fields (stored as context_debug_raw)
-  const debugRaw = snapshot?.context_debug_raw as Record<string, unknown> | undefined;
+  const debugTyped = snapshot?.context_debug;
+  const debugRaw = (snapshot?.context_debug_raw as Record<string, unknown> | undefined) ?? undefined;
+
+  const hasV172 = isV172Contract(debugTyped ?? null);
+  const executionMode = getExecutionMode(debugTyped ?? null);
 
   const embeddingUsed = asBool(debugRaw?.['embedding_used']);
   const rerankUsed = asBool(debugRaw?.['rerank_used']);
@@ -316,30 +336,34 @@ export const ContextDebugPanel: React.FC<ContextDebugPanelProps> = ({
   const [openMemoryIds, setOpenMemoryIds] = useState<Record<string, boolean>>({});
   const toggleMemory = (id: string) => setOpenMemoryIds((prev) => ({ ...prev, [id]: !prev[id] }));
 
-  // Keep compat field (w.1.0.0 snapshots)
   const memorySelectedCompatValue = Array.isArray(snapshot?.memory_selected)
     ? snapshot?.memory_selected.length
     : snapshot?.memory_selected;
 
   const [showRaw, setShowRaw] = useState(false);
 
-  const summaryHint = useMemo(
-    () =>
-      getContextSummaryHint({
-        embeddingUsed,
-        recalledCount,
-        injectedCount: injectedIds.length,
-      }),
-    [embeddingUsed, recalledCount, injectedIds.length]
-  );
+  const summaryText = useMemo(() => {
+    if (executionMode === 'skipped') {
+      return 'Context not applied (intent-driven)';
+    }
+
+    if (embeddingUsed === true && rerankUsed === true) return 'Embedding + Rerank';
+    if (embeddingUsed === true && (rerankUsed === false || rerankUsed === null)) return 'Embedding only';
+    if ((embeddingUsed === false || embeddingUsed === null) && rerankUsed === true) return 'Rerank only';
+    if (embeddingUsed === false && rerankUsed === false) return 'No embedding / no rerank';
+    return '—';
+  }, [executionMode, embeddingUsed, rerankUsed]);
+
+  const shouldShowRecallInject = executionMode !== 'skipped';
+  const shouldShowSelectedMemories = executionMode !== 'skipped';
 
   if (!shouldRender) return null;
 
   return (
     <section className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 space-y-3">
       <div>
-        <div className="text-sm font-semibold text-gray-900">上下文调试</div>
-        <div className="text-xs text-gray-500">Context Reasoning & Tuning UI（w.1.2.0）</div>
+        <div className="text-sm font-semibold text-gray-900">上下文调试（w.1.3.1）</div>
+        <div className="text-xs text-gray-500">展示 v1.7.2 Intent / Policy / Execution 的控制流事实</div>
       </div>
 
       {snapshot?.context_debug_missing ? (
@@ -350,8 +374,10 @@ export const ContextDebugPanel: React.FC<ContextDebugPanelProps> = ({
 
       <div className="space-y-2">
         <SectionLabel title="标识" />
-        <FieldRow label="turn_id" value={turnId || snapshot?.turn_id || '—'} />
-        <FieldRow label="session_id" value={sessionId || snapshot?.session_id || '—'} />
+        <div className="grid grid-cols-2 gap-2">
+          <Badge label="turn_id" value={turnId || snapshot?.turn_id || '—'} />
+          <Badge label="backend session_id" value={sessionId || snapshot?.session_id || '—'} />
+        </div>
         <FieldRow label="conversation_id" value={conversationId || snapshot?.conversation_id || '—'} />
       </div>
 
@@ -363,290 +389,314 @@ export const ContextDebugPanel: React.FC<ContextDebugPanelProps> = ({
         <FieldRow label="task_type" value={taskType || '—'} />
       </div>
 
-      {/* 4 collapsible blocks (default open first 2) */}
-      <div className="space-y-2">
-        <CollapsibleSection
-          title="Context Summary"
-          defaultOpen
-          right={
-            injectedIds.length > 0 ? <Pill tone="green">Injected:{injectedIds.length}</Pill> : <Pill tone="gray">Injected:0</Pill>
-          }
-        >
-          <div className="grid grid-cols-2 gap-2">
-            <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-xs">
-              <span className="text-gray-600">Embedding</span>
-              {embeddingUsed === null ? (
-                <span className="font-mono text-gray-900">—</span>
-              ) : (
-                <Pill tone={embeddingUsed ? 'green' : 'red'}>{embeddingUsed ? 'ON' : 'OFF'}</Pill>
-              )}
-            </div>
-            <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-xs">
-              <span className="text-gray-600">Rerank</span>
-              {rerankUsed === null ? (
-                <span className="font-mono text-gray-900">—</span>
-              ) : (
-                <Pill tone={rerankUsed ? 'green' : 'red'}>{rerankUsed ? 'ON' : 'OFF'}</Pill>
-              )}
-            </div>
-            <Badge label="Recalled" value={recalledCount ?? '—'} />
-            <Badge label="Injected" value={injectedIds.length >= 0 ? injectedIds.length : '—'} />
-          </div>
+      {/* 1. Intent & Policy（仅 v1.7.2 契约存在时展示） */}
+      {hasV172 ? (
+        <div className="border-t border-gray-200 pt-3">
+          <CollapsibleSection title="Intent & Policy" defaultOpen>
+            <IntentPolicyBlock
+              intent={debugTyped?.intent ? ({
+                name: debugTyped.intent.type,
+                confidence: debugTyped.intent.confidence,
+                // keep other v1.7.0 fields undefined
+              } as any) : undefined}
+              contextPolicy={debugTyped?.context_strategy ? ({
+                use_context: debugTyped.context_strategy.use_context,
+                source: typeof debugTyped.context_strategy.source === 'string' ? debugTyped.context_strategy.source : undefined,
+              } as any) : undefined}
+              contextExecution={debugTyped?.context_execution?.mode}
+              // legacy fallback (if backend still sends top-level skip_reason)
+              skipReason={debugTyped?.context_execution?.skip_reason
+                ?? (typeof debugRaw?.['skip_reason'] === 'string' ? (debugRaw['skip_reason'] as string) : undefined)}
+            />
+          </CollapsibleSection>
+        </div>
+      ) : null}
 
-          <div className="text-xs">
-            {summaryHint ? (
-              <div className="flex items-center gap-2">
-                <Pill tone={summaryHint.tone}>{summaryHint.tone.toUpperCase()}</Pill>
-                <span className="text-gray-700">{summaryHint.text}</span>
-              </div>
+      {/* Context Summary */}
+      <CollapsibleSection
+        title="Context Summary"
+        defaultOpen
+        right={
+          executionMode === 'skipped'
+            ? <Pill tone="amber">skipped</Pill>
+            : executionMode === 'used'
+              ? <Pill tone="green">used</Pill>
+              : null
+        }
+      >
+        <div className="grid grid-cols-2 gap-2">
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-xs">
+            <span className="text-gray-600">Embedding</span>
+            {embeddingUsed === null ? (
+              <span className="font-mono text-gray-900">—</span>
             ) : (
-              <span className="text-gray-500">—</span>
+              <Pill tone={embeddingUsed ? 'green' : 'red'}>{embeddingUsed ? 'ON' : 'OFF'}</Pill>
             )}
           </div>
-        </CollapsibleSection>
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-xs">
+            <span className="text-gray-600">Rerank</span>
+            {rerankUsed === null ? (
+              <span className="font-mono text-gray-900">—</span>
+            ) : (
+              <Pill tone={rerankUsed ? 'green' : 'red'}>{rerankUsed ? 'ON' : 'OFF'}</Pill>
+            )}
+          </div>
+          {shouldShowRecallInject ? (
+            <>
+              <Badge label="Recalled" value={recalledCount ?? '—'} />
+              <Badge label="Injected" value={injectedIds.length > 0 ? injectedIds.length : '—'} />
+            </>
+          ) : null}
+        </div>
+        <div className="text-xs text-gray-600">提示：<span className="font-mono text-gray-900">{summaryText}</span></div>
+      </CollapsibleSection>
 
-        <CollapsibleSection
-          title="Context Reasoning Trace"
-          defaultOpen
-          right={reasoningSteps.length > 0 ? <Pill tone="blue">steps:{reasoningSteps.length}</Pill> : <Pill tone="gray">steps:0</Pill>}
-        >
-          {reasoningSteps.length > 0 ? (
-            <div className="space-y-2">
-              {reasoningSteps.map((s, idx) => {
-                const hasCounts = typeof s.input_count === 'number' || typeof s.output_count === 'number';
+      {/* 2. Context Reasoning Trace */}
+      <CollapsibleSection
+        title="Context Reasoning Trace"
+        defaultOpen
+        right={reasoningSteps.length > 0 ? <Pill tone="blue">steps:{reasoningSteps.length}</Pill> : <Pill tone="gray">steps:0</Pill>}
+      >
+        {reasoningSteps.length > 0 ? (
+          <div className="space-y-2">
+            {reasoningSteps.map((s, idx) => {
+              const hasCounts = typeof s.input_count === 'number' || typeof s.output_count === 'number';
 
-                return (
-                  <div key={`${s.stage}-${idx}`} className="rounded-lg border border-gray-200 bg-white p-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-xs font-semibold text-gray-900">[{s.stage}]</div>
-                      <div className="text-[11px] text-gray-500 font-mono">#{idx + 1}</div>
-                    </div>
+              return (
+                <div key={`${s.stage}-${idx}`} className="rounded-lg border border-gray-200 bg-white p-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs font-semibold text-gray-900">[{s.stage}]</div>
+                    <div className="text-[11px] text-gray-500 font-mono">#{idx + 1}</div>
+                  </div>
 
-                    <div className="mt-1 space-y-1 text-xs text-gray-700">
-                      {hasCounts ? (
-                        <div className="font-mono">
-                          {typeof s.input_count === 'number' ? s.input_count : '—'} →{' '}
-                          {typeof s.output_count === 'number' ? s.output_count : '—'}
-                        </div>
-                      ) : null}
+                  <div className="mt-1 space-y-1 text-xs text-gray-700">
+                    {hasCounts ? (
+                      <div className="font-mono">
+                        {typeof s.input_count === 'number' ? s.input_count : '—'} →{' '}
+                        {typeof s.output_count === 'number' ? s.output_count : '—'}
+                      </div>
+                    ) : null}
 
-                      {s.rule ? (
-                        <div>
-                          <span className="text-gray-500">rule:</span>{' '}
-                          <span className="font-mono break-all">{s.rule}</span>
-                        </div>
-                      ) : null}
+                    {s.rule ? (
+                      <div>
+                        <span className="text-gray-500">rule:</span>{' '}
+                        <span className="font-mono break-all">{s.rule}</span>
+                      </div>
+                    ) : null}
 
-                      {s.params !== undefined ? (
-                        <div>
-                          <span className="text-gray-500">params:</span>{' '}
-                          <span className="font-mono break-all">{stringifyCompact(s.params)}</span>
-                        </div>
-                      ) : null}
+                    {s.params !== undefined ? (
+                      <div>
+                        <span className="text-gray-500">params:</span>{' '}
+                        <span className="font-mono break-all">{stringifyCompact(s.params)}</span>
+                      </div>
+                    ) : null}
 
-                      {!hasCounts && !s.rule && s.params === undefined ? (
-                        <div className="text-gray-500">—</div>
-                      ) : null}
-                    </div>
-
-                    {idx < reasoningSteps.length - 1 ? (
-                      <div className="mt-2 flex justify-center text-gray-300 select-none">↓</div>
+                    {!hasCounts && !s.rule && s.params === undefined ? (
+                      <div className="text-gray-500">—</div>
                     ) : null}
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="text-xs text-gray-500">未返回 context_reasoning.steps</div>
-          )}
-        </CollapsibleSection>
 
-        <CollapsibleSection title="Backend Status" defaultOpen={false}>
-          {contextBackends && Object.keys(contextBackends).length > 0 ? (
-            <div className="rounded-lg border border-gray-200 overflow-hidden">
-              <table className="w-full text-xs">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr className="text-left">
-                    <th className="p-2 w-[92px]">Module</th>
-                    <th className="p-2 w-[120px]">Backend</th>
-                    <th className="p-2 w-[112px]">Status</th>
-                    <th className="p-2 w-[90px]">Fallback</th>
-                    <th className="p-2">Reason</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(contextBackends).map(([moduleName, v]) => {
-                    const rec = asRecord(v);
+                  {idx < reasoningSteps.length - 1 ? (
+                    <div className="mt-2 flex justify-center text-gray-300 select-none">↓</div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-xs text-gray-500">未返回 context_reasoning.steps</div>
+        )}
+      </CollapsibleSection>
 
-                    const backend =
-                      asString(rec?.['backend']) ??
-                      asString(rec?.['driver']) ??
-                      asString(rec?.['provider']) ??
-                      asString(rec?.['impl']) ??
-                      (typeof v === 'string' ? (v as string) : null);
+      {/* 3. Backend Status */}
+      <CollapsibleSection title="Backend Status" defaultOpen={false}>
+        {contextBackends && Object.keys(contextBackends).length > 0 ? (
+          <div className="rounded-lg border border-gray-200 overflow-hidden">
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr className="text-left">
+                  <th className="p-2 w-[92px]">Module</th>
+                  <th className="p-2 w-[120px]">Backend</th>
+                  <th className="p-2 w-[112px]">Status</th>
+                  <th className="p-2 w-[90px]">Fallback</th>
+                  <th className="p-2">Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(contextBackends).map(([moduleName, v]) => {
+                  const rec = asRecord(v);
 
-                    const status = asString(rec?.['status']) ?? asString(rec?.['state']) ?? asString(rec?.['result']) ?? null;
-                    const fallback = rec?.['fallback'] ?? rec?.['fallback_to'] ?? rec?.['fallbackTo'];
-                    const fallbackText =
-                      typeof fallback === 'boolean' ? (fallback ? 'true' : 'false') : typeof fallback === 'string' ? fallback : null;
+                  const backend =
+                    asString(rec?.['backend']) ??
+                    asString(rec?.['driver']) ??
+                    asString(rec?.['provider']) ??
+                    asString(rec?.['impl']) ??
+                    (typeof v === 'string' ? (v as string) : null);
 
-                    const reason =
-                      asString(rec?.['reason']) ?? asString(rec?.['message']) ?? asString(rec?.['detail']) ?? null;
+                  const status = asString(rec?.['status']) ?? asString(rec?.['state']) ?? asString(rec?.['result']) ?? null;
+                  const fallback = rec?.['fallback'] ?? rec?.['fallback_to'] ?? rec?.['fallbackTo'];
+                  const fallbackText =
+                    typeof fallback === 'boolean' ? (fallback ? 'true' : 'false') : typeof fallback === 'string' ? fallback : null;
 
-                    const tone = getBackendStatusTone(status);
+                  const reason =
+                    asString(rec?.['reason']) ?? asString(rec?.['message']) ?? asString(rec?.['detail']) ?? null;
 
-                    return (
-                      <tr key={moduleName} className="border-b border-gray-100 last:border-b-0">
-                        <td className="p-2 font-mono text-gray-900">{moduleName}</td>
-                        <td className="p-2 font-mono text-gray-900">{backend ?? '—'}</td>
-                        <td className="p-2">{status ? <Pill tone={tone}>{status}</Pill> : <Pill tone="gray">unknown</Pill>}</td>
-                        <td className="p-2 font-mono text-gray-800">{fallbackText ?? '—'}</td>
-                        <td className="p-2 text-gray-800">{reason ? <span className="font-mono break-all">{reason}</span> : <span className="text-gray-500">—</span>}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="text-xs text-gray-500">未返回 context_backends</div>
-          )}
-        </CollapsibleSection>
+                  const tone = getBackendStatusTone(status);
 
-        <CollapsibleSection
-          title="Selected Memories"
-          defaultOpen={false}
-          right={selectedCount ? <Pill tone="blue">selected:{selectedCount}</Pill> : <Pill tone="gray">selected:0</Pill>}
-        >
+                  return (
+                    <tr key={moduleName} className="border-b border-gray-100 last:border-b-0">
+                      <td className="p-2 font-mono text-gray-900">{moduleName}</td>
+                      <td className="p-2 font-mono text-gray-900">{backend ?? '—'}</td>
+                      <td className="p-2">{status ? <Pill tone={tone}>{status}</Pill> : <Pill tone="gray">unknown</Pill>}</td>
+                      <td className="p-2 font-mono text-gray-800">{fallbackText ?? '—'}</td>
+                      <td className="p-2 text-gray-800">{reason ? <span className="font-mono break-all">{reason}</span> : <span className="text-gray-500">—</span>}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="text-xs text-gray-500">未返回 context_backends</div>
+        )}
+      </CollapsibleSection>
+
+      {/* 4. Selected Memories */}
+      <CollapsibleSection title="Selected Memories" defaultOpen>
+        {shouldShowSelectedMemories ? (
           <div className="grid grid-cols-2 gap-2">
             <Badge label="Selected" value={selectedCount ?? '—'} />
             <Badge label="Injected IDs" value={injectedIds.length > 0 ? injectedIds.join(', ') : '—'} />
           </div>
-
-          {selectedMemories.length > 0 ? (
-            <div className="space-y-2">
-              {selectedMemories.map((m, idx) => {
-                const id = pickMemoryId(m, idx);
-                const content = pickMemoryContent(m);
-                const breakdown = getScoreBreakdown(m);
-                const selection = getSelectionReason(m);
-
-                const finalScore = pickFinalScore(m);
-                const source = pickMemorySource(m);
-                const rank = pickMemoryRank(m);
-
-                const openKey = `${id}-${idx}`;
-                const isOpen = Boolean(openMemoryIds[openKey]);
-
-                return (
-                  <div key={openKey} className="rounded-lg border border-gray-200 overflow-hidden">
-                    <button
-                      type="button"
-                      className="w-full px-3 py-2 text-left text-xs bg-gray-50 hover:bg-gray-100 flex items-center justify-between gap-2"
-                      onClick={() => toggleMemory(openKey)}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-semibold text-gray-900">
-                          [Rank #{typeof rank === 'number' ? rank : idx + 1}]
-                        </span>
-                        <span className="font-mono text-gray-900 truncate">{id}</span>
-                        <span className="text-gray-500">
-                          final_score: <span className="font-mono text-gray-900">{finalScore !== null ? finalScore.toFixed(4) : '—'}</span>
-                          {source ? (
-                            <>
-                              {' '}· source: <span className="font-mono text-gray-900">{source}</span>
-                            </>
-                          ) : null}
-                        </span>
-                      </div>
-                      <span className="text-gray-600 font-mono">{isOpen ? '−' : '+'}</span>
-                    </button>
-
-                    {isOpen ? (
-                      <div className="px-3 py-2 text-xs space-y-2">
-                        {content ? (
-                          <div className="whitespace-pre-wrap break-words text-gray-900">{content}</div>
-                        ) : (
-                          <div className="text-gray-500">无 content 字段</div>
-                        )}
-
-                        <div className="space-y-1">
-                          <div className="text-[11px] font-semibold text-gray-700 uppercase tracking-wide">Score Breakdown</div>
-                          {breakdown.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {breakdown.map((b) => (
-                                <Pill key={b.label} tone="blue">
-                                  {b.label}:{b.value.toFixed(4)}
-                                </Pill>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="text-gray-500">—</div>
-                          )}
-                        </div>
-
-                        <div className="space-y-1">
-                          <div className="text-[11px] font-semibold text-gray-700 uppercase tracking-wide">Selection Reason</div>
-                          {selection.passed_recall !== undefined ||
-                          selection.passed_rerank !== undefined ||
-                          selection.dropped_reason ? (
-                            <div className="space-y-1">
-                              {selection.passed_recall !== undefined ? (
-                                <div>
-                                  <span className="text-gray-500">passed_recall:</span>{' '}
-                                  <span className="font-mono text-gray-900">{String(selection.passed_recall)}</span>
-                                </div>
-                              ) : null}
-                              {selection.passed_rerank !== undefined ? (
-                                <div>
-                                  <span className="text-gray-500">passed_rerank:</span>{' '}
-                                  <span className="font-mono text-gray-900">{String(selection.passed_rerank)}</span>
-                                </div>
-                              ) : null}
-                              {selection.dropped_reason ? (
-                                <div>
-                                  <span className="text-gray-500">dropped_reason:</span>{' '}
-                                  <span className="font-mono break-all text-gray-900">{selection.dropped_reason}</span>
-                                </div>
-                              ) : null}
-                            </div>
-                          ) : (
-                            <div className="text-gray-500">—</div>
-                          )}
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="text-xs text-gray-500">未返回 memory_selected，且 context_debug.memories 为空</div>
-          )}
-
-          <div className="pt-2 border-t border-gray-100">
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="text-xs px-2 py-1 rounded border border-gray-200 bg-gray-50 text-gray-500 cursor-not-allowed"
-                disabled
-                title="PRD 可选增强点：需后端 replay API"
-              >
-                Replay Context Decision
-              </button>
-              <button
-                type="button"
-                className="text-xs px-2 py-1 rounded border border-gray-200 bg-gray-50 text-gray-500 cursor-not-allowed"
-                disabled
-                title="PRD 占位：需 /services/context/tune"
-              >
-                Try Weight Simulation
-              </button>
-            </div>
-            <div className="mt-1 text-[11px] text-gray-500">占位按钮：后端 API 可用时再接入（本版本不强制）。</div>
+        ) : (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-2 text-xs text-gray-600">
+            Context was skipped by policy. No memories were selected.
           </div>
-        </CollapsibleSection>
-      </div>
+        )}
+
+        {shouldShowSelectedMemories && selectedMemories.length > 0 ? (
+          <div className="space-y-2">
+            {selectedMemories.map((m, idx) => {
+              const id = pickMemoryId(m, idx);
+              const content = pickMemoryContent(m);
+              const breakdown = getScoreBreakdown(m);
+              const selection = getSelectionReason(m);
+
+              const finalScore = pickFinalScore(m);
+              const source = pickMemorySource(m);
+              const rank = pickMemoryRank(m);
+
+              const openKey = `${id}-${idx}`;
+              const isOpen = Boolean(openMemoryIds[openKey]);
+
+              return (
+                <div key={openKey} className="rounded-lg border border-gray-200 overflow-hidden">
+                  <button
+                    type="button"
+                    className="w-full px-3 py-2 text-left text-xs bg-gray-50 hover:bg-gray-100 flex items-center justify-between gap-2"
+                    onClick={() => toggleMemory(openKey)}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-semibold text-gray-900">
+                        [Rank #{typeof rank === 'number' ? rank : idx + 1}]
+                      </span>
+                      <span className="font-mono text-gray-900 truncate">{id}</span>
+                      <span className="text-gray-500">
+                        final_score: <span className="font-mono text-gray-900">{finalScore !== null ? finalScore.toFixed(4) : '—'}</span>
+                        {source ? (
+                          <>
+                            {' '}· source: <span className="font-mono text-gray-900">{source}</span>
+                          </>
+                        ) : null}
+                      </span>
+                    </div>
+                    <span className="text-gray-600 font-mono">{isOpen ? '−' : '+'}</span>
+                  </button>
+
+                  {isOpen ? (
+                    <div className="px-3 py-2 text-xs space-y-2">
+                      {content ? (
+                        <div className="whitespace-pre-wrap break-words text-gray-900">{content}</div>
+                      ) : (
+                        <div className="text-gray-500">无 content 字段</div>
+                      )}
+
+                      <div className="space-y-1">
+                        <div className="text-[11px] font-semibold text-gray-700 uppercase tracking-wide">Score Breakdown</div>
+                        {breakdown.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {breakdown.map((b) => (
+                              <Pill key={b.label} tone="blue">
+                                {b.label}:{b.value.toFixed(4)}
+                              </Pill>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-gray-500">—</div>
+                        )}
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="text-[11px] font-semibold text-gray-700 uppercase tracking-wide">Selection Reason</div>
+                        {selection.passed_recall !== undefined ||
+                        selection.passed_rerank !== undefined ||
+                        selection.dropped_reason ? (
+                          <div className="space-y-1">
+                            {selection.passed_recall !== undefined ? (
+                              <div>
+                                <span className="text-gray-500">passed_recall:</span>{' '}
+                                <span className="font-mono text-gray-900">{String(selection.passed_recall)}</span>
+                              </div>
+                            ) : null}
+                            {selection.passed_rerank !== undefined ? (
+                              <div>
+                                <span className="text-gray-500">passed_rerank:</span>{' '}
+                                <span className="font-mono text-gray-900">{String(selection.passed_rerank)}</span>
+                              </div>
+                            ) : null}
+                            {selection.dropped_reason ? (
+                              <div>
+                                <span className="text-gray-500">dropped_reason:</span>{' '}
+                                <span className="font-mono break-all text-gray-900">{selection.dropped_reason}</span>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <div className="text-gray-500">—</div>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-xs text-gray-500">未返回 memory_selected，且 context_debug.memories 为空</div>
+        )}
+
+        <div className="pt-2 border-t border-gray-100">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="text-xs px-2 py-1 rounded border border-gray-200 bg-gray-50 text-gray-500 cursor-not-allowed"
+              disabled
+              title="PRD 可选增强点：需后端 replay API"
+            >
+              Replay Context Decision
+            </button>
+            <button
+              type="button"
+              className="text-xs px-2 py-1 rounded border border-gray-200 bg-gray-50 text-gray-500 cursor-not-allowed"
+              disabled
+              title="PRD 占位：需 /services/context/tune"
+            >
+              Try Weight Simulation
+            </button>
+          </div>
+          <div className="mt-1 text-[11px] text-gray-500">占位按钮：后端 API 可用时再接入（本版本不强制）。</div>
+        </div>
+      </CollapsibleSection>
 
       {/* keep old context/tokens for debugging */}
       <div className="space-y-2">

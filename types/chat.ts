@@ -21,6 +21,8 @@ export type ContextTokensBreakdown = {
   summary?: number;
 };
 
+export type ContextDebugV172 = import('./contextDebug_v1_7_2').ContextDebugV172;
+
 export type ObservabilitySnapshot = {
   turn_id?: string;
   session_id?: string;
@@ -40,6 +42,14 @@ export type ObservabilitySnapshot = {
   context_backends?: Record<string, unknown>;
   turn_meta?: Record<string, unknown>;
   context_debug_missing?: boolean;
+
+  /**
+   * v1.7.2 stable contract (typed). Prefer reading this in UI.
+   * Built from `context_debug_raw` best-effort.
+   */
+  context_debug?: ContextDebugV172;
+
+  /** Raw backend payload for backward compatibility / inspection. */
   context_debug_raw?: Record<string, unknown>;
 };
 

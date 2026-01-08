@@ -17,26 +17,44 @@ type LangGraphPathPanelV170Props = {
  * 兼容后端灰度：同时接受 PRD PascalCase 与 legacy snake_case
  */
 const CANONICAL_NODE_NAMES = {
-  // PRD names
+  // PRD names (PascalCase)
   INTENT_CLASSIFIER_PRD: 'IntentClassifierNode',
   CONTEXT_POLICY_PRD: 'ContextPolicyNode',
   SKIP_CONTEXT_PRD: 'SkipContextNode',
-  // legacy names (历史 mock/旧 trace)
-  INTENT_CLASSIFIER_LEGACY: 'intent_classifier',
-  CONTEXT_POLICY_LEGACY: 'context_policy',
-  SKIP_CONTEXT_LEGACY: 'skip_context',
+
+  // v1.7.2 docs (snake_case)
+  INTENT_CLASSIFIER_V172: 'intent_classifier',
+  CONTEXT_POLICY_V172: 'context_policy',
+  SKIP_CONTEXT_V172: 'skip_context',
+
+  // other common variants (defensive)
+  INTENT_CLASSIFIER_ALT: 'IntentClassifier',
+  CONTEXT_POLICY_ALT: 'ContextPolicy',
+  SKIP_CONTEXT_ALT: 'SkipContext',
 } as const;
 
 function isIntentClassifierNode(name?: string): boolean {
-  return name === CANONICAL_NODE_NAMES.INTENT_CLASSIFIER_PRD || name === CANONICAL_NODE_NAMES.INTENT_CLASSIFIER_LEGACY;
+  return Boolean(name) && [
+    CANONICAL_NODE_NAMES.INTENT_CLASSIFIER_PRD,
+    CANONICAL_NODE_NAMES.INTENT_CLASSIFIER_V172,
+    CANONICAL_NODE_NAMES.INTENT_CLASSIFIER_ALT,
+  ].includes(name as never);
 }
 
 function isContextPolicyNode(name?: string): boolean {
-  return name === CANONICAL_NODE_NAMES.CONTEXT_POLICY_PRD || name === CANONICAL_NODE_NAMES.CONTEXT_POLICY_LEGACY;
+  return Boolean(name) && [
+    CANONICAL_NODE_NAMES.CONTEXT_POLICY_PRD,
+    CANONICAL_NODE_NAMES.CONTEXT_POLICY_V172,
+    CANONICAL_NODE_NAMES.CONTEXT_POLICY_ALT,
+  ].includes(name as never);
 }
 
 function isSkipContextNode(name?: string): boolean {
-  return name === CANONICAL_NODE_NAMES.SKIP_CONTEXT_PRD || name === CANONICAL_NODE_NAMES.SKIP_CONTEXT_LEGACY;
+  return Boolean(name) && [
+    CANONICAL_NODE_NAMES.SKIP_CONTEXT_PRD,
+    CANONICAL_NODE_NAMES.SKIP_CONTEXT_V172,
+    CANONICAL_NODE_NAMES.SKIP_CONTEXT_ALT,
+  ].includes(name as never);
 }
 
 /**
@@ -58,15 +76,15 @@ function getNodeStyle(nodeName?: string): { color: string; bgColor: string; tool
     return {
       color: 'text-purple-700',
       bgColor: 'bg-purple-100',
-      tooltip: 'Context policy resolution node',
+      tooltip: 'Context policy / strategy resolution node',
     };
   }
 
   if (isSkipContextNode(nodeName)) {
     return {
-      color: 'text-gray-700',
+      color: 'text-gray-600',
       bgColor: 'bg-gray-100',
-      tooltip: 'Skipped by intent policy',
+      tooltip: 'Context was skipped (see context_execution.skip_reason for details)',
     };
   }
 
@@ -79,7 +97,7 @@ function getNodeStyle(nodeName?: string): { color: string; bgColor: string; tool
 function getEdgeStyle(edgeName?: string): { label: string; color: string } {
   if (!edgeName) return { label: edgeName ?? '—', color: 'text-gray-500' };
 
-  // 特殊处理 skip_context 边
+  // w.1.3.1: edge label fixed for skip branch
   if (edgeName === 'skip_context' || edgeName.includes('skip')) {
     return {
       label: 'skip_context',

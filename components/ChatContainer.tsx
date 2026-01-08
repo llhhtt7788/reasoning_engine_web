@@ -10,15 +10,20 @@ import { InputBar } from './InputBar';
 import { streamChat } from '@/lib/sseClient';
 import { DecisionPathSidebar } from './DecisionPathSidebar';
 import { ReasoningSidebar } from './ReasoningSidebar';
-import {
-    getOrInitConversationId,
-    persistConversationId,
-    persistSessionId,
-    resetSessionState,
-} from '@/lib/sessionManager';
+import { persistConversationId } from '@/lib/sessionManager';
 import { INFERENCE_CONFIG, inferMode } from '@/lib/responseInference';
+import { useIdentityStore } from '@/store/identityStore';
 
 const MODE_FADE_DELAY_MS = 1400;
+
+// Layout defaults (can be tuned without touching JSX)
+const DEFAULT_LEFT_PANEL_PX = 460;
+const MIN_LEFT_PANEL_PX = 320;
+const MAX_LEFT_PANEL_PX = 720;
+const RIGHT_PANEL_PX = 460;
+const HEADER_HEIGHT_PX = 80;
+
+const LEFT_PANEL_WIDTH_KEY = 'medgo.ui.left_panel_px';
 
 function newClientSessionId(): string {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -34,7 +39,6 @@ export const ChatContainer: React.FC = () => {
         addMessage,
         updateLastAssistant,
         setStreaming,
-        clearMessages,
         setLastAssistantRoute,
         mergeAssistantMeta,
         mergeLastAssistantMeta,
@@ -42,15 +46,16 @@ export const ChatContainer: React.FC = () => {
         setUiMode,
     } = useChatStore();
 
-    const [conversationId, setConversationId] = useState<string | undefined>(() => getOrInitConversationId());
-    const [sessionId, setSessionId] = useState<string | null>(null);
+    const conversationId = useIdentityStore((s) => s.conversationId);
+    const conversationRootId = useIdentityStore((s) => s.conversationRootId);
+    const sessionId = useIdentityStore((s) => s.sessionId);
+    const setSessionId = useIdentityStore((s) => s.setSessionId);
+    const setConversationId = useIdentityStore((s) => s.setConversationId);
 
-    // Always refresh session_id on page load.
+    // Always refresh session_id on page load (refresh => new).
     useEffect(() => {
-        const fresh = newClientSessionId();
-        resetSessionState();
-        persistSessionId(fresh);
-        setSessionId(fresh);
+        setSessionId(newClientSessionId());
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const fadeTimerRef = useRef<number | null>(null);
@@ -118,12 +123,10 @@ export const ChatContainer: React.FC = () => {
         firstTokenSeenRef.current = false;
         requestStartTsRef.current = Date.now();
 
-        const ensuredConversationId = conversationId ?? getOrInitConversationId();
-        setConversationId(ensuredConversationId);
+        const ensuredConversationId = conversationId;
+        const ensuredSessionId = sessionId || newClientSessionId();
 
-        const ensuredSessionId = sessionId ?? newClientSessionId();
         if (!sessionId) {
-            persistSessionId(ensuredSessionId);
             setSessionId(ensuredSessionId);
         }
 
@@ -154,17 +157,11 @@ export const ChatContainer: React.FC = () => {
                 onRoute: (route) => {
                     setLastAssistantRoute(route);
                     mergeAssistantMeta(route);
-                    if (route.session_id) {
-                        persistSessionId(route.session_id);
-                        setSessionId(route.session_id);
-                    }
-                    if (route.conversation_id) {
-                        persistConversationId(route.conversation_id);
-                        setConversationId(route.conversation_id);
-                    }
 
-                    // v1: DO NOT set any UI mode based on backend routing or agent.
-                    // We only use response behavior inference at message level.
+                    // conversation_id is frontend-controlled in w.1.3.2; keep backend value for display only.
+                    if (route.conversation_id && route.conversation_id !== ensuredConversationId) {
+                        mergeAssistantMeta({ conversation_id: route.conversation_id });
+                    }
                 },
                 onFirstToken: (tsMs) => {
                     if (firstTokenSeenRef.current) return;
@@ -204,18 +201,10 @@ export const ChatContainer: React.FC = () => {
                 },
                 onObservability: (meta) => {
                     mergeAssistantMeta(meta);
-                    if (meta.session_id) {
-                        persistSessionId(meta.session_id);
-                        setSessionId(meta.session_id);
-                    }
-                    if (meta.conversation_id) {
-                        persistConversationId(meta.conversation_id);
-                        setConversationId(meta.conversation_id);
-                    }
                 },
                 onError: (error) => {
                     clearInferenceTimers();
-                    updateLastAssistant(`\n\n请求失败: ${error.message}`);
+                    updateLastAssistant(`\n\n\u8bf7\u6c42\u5931\u8d25: ${error.message}`);
                     setStreaming(false);
                     scheduleFadeToIdle();
                 },
@@ -232,24 +221,69 @@ export const ChatContainer: React.FC = () => {
                 },
             },
             {
-                conversationId: ensuredConversationId ?? 'unknown_conversation',
+                conversationId: ensuredConversationId,
+                conversationRootId: conversationRootId,
                 sessionId: ensuredSessionId,
             }
         );
     };
 
-    const handleClear = () => {
-        if (confirm('确定要清空对话历史吗？')) {
-            clearMessages();
-            setUiMode('idle');
 
-            // Refresh session id on clear.
-            const fresh = newClientSessionId();
-            resetSessionState();
-            persistSessionId(fresh);
-            setSessionId(fresh);
+    // Draggable split: left panel width (persisted)
+    const [leftPanelPx, setLeftPanelPx] = useState<number>(() => {
+        if (typeof window === 'undefined' || typeof localStorage === 'undefined') return DEFAULT_LEFT_PANEL_PX;
+        const raw = localStorage.getItem(LEFT_PANEL_WIDTH_KEY);
+        const parsed = raw ? parseInt(raw, 10) : NaN;
+        if (Number.isFinite(parsed)) {
+            return Math.max(MIN_LEFT_PANEL_PX, Math.min(MAX_LEFT_PANEL_PX, parsed));
         }
-    };
+        return DEFAULT_LEFT_PANEL_PX;
+    });
+    const dragRef = useRef<{ dragging: boolean; startX: number; startW: number } | null>(null);
+
+    // Tooltip for split bar
+    const [isSplitHover, setIsSplitHover] = useState(false);
+
+    useEffect(() => {
+        const onMove = (e: MouseEvent) => {
+            const st = dragRef.current;
+            if (!st?.dragging) return;
+
+            const dx = e.clientX - st.startX;
+            const next = Math.max(MIN_LEFT_PANEL_PX, Math.min(MAX_LEFT_PANEL_PX, st.startW + dx));
+            setLeftPanelPx(next);
+        };
+
+        const onUp = () => {
+            const st = dragRef.current;
+            if (!st?.dragging) return;
+            dragRef.current = { dragging: false, startX: 0, startW: leftPanelPx };
+
+            // persist on drag end
+            try {
+                localStorage.setItem(LEFT_PANEL_WIDTH_KEY, String(leftPanelPx));
+            } catch {
+                // ignore
+            }
+
+            // restore selection behavior
+            document.body.classList.remove('select-none');
+        };
+
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+        return () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+    }, [leftPanelPx]);
+
+    // Ensure we don't get stuck in no-select mode on unmount.
+    useEffect(() => {
+        return () => {
+            document.body.classList.remove('select-none');
+        };
+    }, []);
 
     return (
         <div className="h-screen w-full">
@@ -259,32 +293,78 @@ export const ChatContainer: React.FC = () => {
                     <div className="flex items-center gap-3">
                         <h1 className="text-2xl font-bold text-gray-950 tracking-tight">Med-Go 推理工作台</h1>
                     </div>
-                    <button
-                        onClick={handleClear}
-                        disabled={messages.length === 0 || isStreaming}
-                        className="px-4 py-2 text-sm border border-gray-300 rounded-xl hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                        清空对话
-                    </button>
+
+                    <div className="flex items-center gap-2">
+                        <div className="text-xs text-gray-500">
+                            Conversation: <span className="font-mono text-gray-900">{conversationId}</span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                // quick reset to default == user_id (conversationRootId)
+                                setConversationId(conversationRootId);
+                                persistConversationId(conversationRootId);
+                            }}
+                            className="text-xs px-2 py-1 rounded-md border border-gray-200 bg-white hover:bg-gray-50"
+                            title="Reset conversation_id to default (user_id)"
+                        >
+                            Reset
+                        </button>
+                    </div>
                 </div>
-                <p className="text-sm text-gray-600 mt-1">AI 驾驶舱：左侧决策路径 · 中间问答 · 右侧思维链</p>
             </header>
 
-            {/* 3-column cockpit */}
-            <div className="h-[calc(100vh-73px)] grid grid-cols-12">
-                {/* Left: Decision Path (always on) */}
-                <div className="col-span-3 min-w-0">
+            {/* Main */}
+            <div
+                className="grid"
+                style={{
+                    height: `calc(100vh - ${HEADER_HEIGHT_PX}px)`,
+                    gridTemplateColumns: `${leftPanelPx}px 6px 1fr ${RIGHT_PANEL_PX}px`,
+                }}
+            >
+                <div className="h-full">
                     <DecisionPathSidebar />
                 </div>
 
-                {/* Center: Q&A */}
-                <div className="col-span-6 min-w-0 flex flex-col">
-                    <MessageList messages={messages} showMetaPanels={false} />
-                    <InputBar onSend={handleSend} disabled={isStreaming} />
+                {/* Drag handle */}
+                <div
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label="Resize left panel"
+                    className="h-full cursor-col-resize bg-gray-100 hover:bg-gray-200 transition-colors relative"
+                    onMouseDown={(e) => {
+                        dragRef.current = { dragging: true, startX: e.clientX, startW: leftPanelPx };
+                        // prevent selecting text while dragging
+                        document.body.classList.add('select-none');
+                    }}
+                    onDoubleClick={() => {
+                        setLeftPanelPx(DEFAULT_LEFT_PANEL_PX);
+                        try {
+                            localStorage.setItem(LEFT_PANEL_WIDTH_KEY, String(DEFAULT_LEFT_PANEL_PX));
+                        } catch {
+                            // ignore
+                        }
+                    }}
+                    onMouseEnter={() => setIsSplitHover(true)}
+                    onMouseLeave={() => setIsSplitHover(false)}
+                    title="Drag to resize · Double-click to reset"
+                >
+                    {isSplitHover || dragRef.current?.dragging ? (
+                        <div className="absolute left-2 top-2 z-50 pointer-events-none rounded-md border border-gray-200 bg-white/95 px-2 py-1 text-[11px] text-gray-700 shadow-sm">
+                            {leftPanelPx}px
+                        </div>
+                    ) : null}
                 </div>
 
-                {/* Right: Reasoning */}
-                <div className="col-span-3 min-w-0">
+                <main className="h-full flex flex-col">
+                    <div className="flex-1 overflow-hidden">
+                        <MessageList messages={messages} />
+                    </div>
+                    <InputBar onSend={handleSend} disabled={isStreaming} />
+                </main>
+
+
+                <div className="h-full">
                     <ReasoningSidebar />
                 </div>
             </div>

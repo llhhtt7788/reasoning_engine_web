@@ -1,13 +1,6 @@
 // lib/sessionManager.ts
 
 const CONVERSATION_KEY = 'langgraph.conversation_id';
-const SESSION_KEY = 'langgraph.session_entry';
-const DEFAULT_SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes
-
-type SessionEntry = {
-  id: string;
-  savedAt: number;
-};
 
 const isBrowser = () => typeof window !== 'undefined' && typeof localStorage !== 'undefined';
 
@@ -16,35 +9,9 @@ const generateId = () =>
     ? crypto.randomUUID()
     : `conv_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
-function parseEntry(raw: string | null): SessionEntry | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as SessionEntry;
-    if (typeof parsed?.id === 'string' && typeof parsed?.savedAt === 'number') {
-      return parsed;
-    }
-  } catch (err) {
-    console.warn('Failed to parse session entry', err);
-  }
-  return null;
-}
-
-function isExpired(entry: SessionEntry, ttlMs: number) {
-  return Date.now() - entry.savedAt > ttlMs;
-}
-
-function readEntry(storage: Storage): SessionEntry | null {
-  return parseEntry(storage.getItem(SESSION_KEY));
-}
-
-function writeEntry(storage: Storage, sessionId: string) {
-  const payload = JSON.stringify({ id: sessionId, savedAt: Date.now() });
-  storage.setItem(SESSION_KEY, payload);
-}
-
-function clearEntry(storage: Storage) {
-  storage.removeItem(SESSION_KEY);
-}
+// NOTE: w.1.3.2 identity model
+// - conversation_id: stable (defaults to user_id, but editable) and can be persisted
+// - session_id: per page lifecycle (refresh => new). Do NOT persist or reuse across refresh.
 
 export function getOrInitConversationId(): string | undefined {
   if (!isBrowser()) return undefined;
@@ -61,50 +28,12 @@ export function persistConversationId(conversationId: string) {
   localStorage.setItem(CONVERSATION_KEY, conversationId);
 }
 
-export function getReusableSessionId(ttlMs: number = DEFAULT_SESSION_TTL_MS): string | null {
-  if (!isBrowser()) return null;
-
-  const storages = [sessionStorage, localStorage];
-  for (const storage of storages) {
-    const entry = readEntry(storage);
-    if (entry && !isExpired(entry, ttlMs)) {
-      // sync back to sessionStorage to support refresh scenarios
-      if (storage !== sessionStorage) {
-        writeEntry(sessionStorage, entry.id);
-      }
-      return entry.id;
-    }
-  }
-
-  // cleanup expired entries
-  clearExpiredSession(ttlMs);
-  return null;
-}
-
-export function persistSessionId(sessionId: string) {
-  if (!isBrowser()) return;
-  writeEntry(sessionStorage, sessionId);
-  writeEntry(localStorage, sessionId);
-}
-
-export function clearExpiredSession(ttlMs: number = DEFAULT_SESSION_TTL_MS) {
-  if (!isBrowser()) return;
-
-  const sessionEntry = readEntry(sessionStorage);
-  if (sessionEntry && isExpired(sessionEntry, ttlMs)) {
-    clearEntry(sessionStorage);
-  }
-
-  const localEntry = readEntry(localStorage);
-  if (localEntry && isExpired(localEntry, ttlMs)) {
-    clearEntry(localStorage);
-  }
+// Session helpers are intentionally minimal. We keep the API surface used by the app,
+// but do not persist anything to storage.
+export function persistSessionId(_sessionId: string) {
+  // no-op by design (session_id should change on refresh)
 }
 
 export function resetSessionState() {
-  if (!isBrowser()) return;
-  clearEntry(sessionStorage);
-  clearEntry(localStorage);
+  // no-op (kept for backward compatibility)
 }
-
-export const SESSION_TTL_MS = DEFAULT_SESSION_TTL_MS;

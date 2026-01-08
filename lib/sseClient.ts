@@ -1,5 +1,6 @@
 // lib/sseClient.ts
 import { ChatMessage, ChatRouteEvent, LangGraphPathEvent, ObservabilitySnapshot } from '@/types/chat';
+import { normalizeContextDebugV172 } from '@/types/contextDebug_v1_7_2';
 
 // NOTE: In the browser we always go through the Next.js proxy route so we don't
 // fight CORS/SSE restrictions. The proxy itself forwards to NEXT_PUBLIC_API_URL.
@@ -190,6 +191,7 @@ function extractObservability(payload: SSEData | Record<string, unknown> | null 
     turn_meta: typeof turnMeta === 'object' && turnMeta !== null ? (turnMeta as Record<string, unknown>) : undefined,
     context_debug_missing: !hasContextDebug,
     context_debug_raw: contextDebug,
+    context_debug: normalizeContextDebugV172(contextDebug) ?? undefined,
   };
 
   // Remove undefined keys so we don't overwrite existing data with undefined when merging
@@ -237,7 +239,8 @@ function parseSSEFrame(frameText: string): SSEFrame | null {
 
 export type ChatRequestContext = {
   conversationId: string;
-  sessionId?: string | null;
+  conversationRootId?: string;
+  sessionId: string;
 };
 
 export async function streamChat(
@@ -265,7 +268,8 @@ export async function streamChat(
       stream: true,
       messages: messageHistory,
       conversation_id: context.conversationId,
-      session_id: context.sessionId ?? null,
+      conversation_root_id: context.conversationRootId ?? context.conversationId,
+      session_id: context.sessionId,
     };
 
     // Add optional fields from cached environment configuration

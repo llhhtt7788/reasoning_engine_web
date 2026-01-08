@@ -1,12 +1,103 @@
 import { NextRequest } from 'next/server';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 // A small, safe proxy to forward browser requests to the backend SSE endpoint
 // and add the correct CORS headers for the browser.
 // Allowlist origins for security.
 const ALLOWED_ORIGINS = ['http://localhost:3000'];
 
+const ENABLE_REQUEST_LOGS = process.env.ENABLE_REQUEST_LOGS === '1' || process.env.ENABLE_REQUEST_LOGS === 'true';
+const LOG_DIR = process.env.REQUEST_LOG_DIR || 'logs';
+const MAX_LOG_BYTES = (() => {
+  const raw = process.env.REQUEST_LOG_MAX_BYTES;
+  const n = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(n) ? n : 256 * 1024;
+})();
+
 function isAllowedOrigin(origin: string | null): origin is string {
   return !!origin && ALLOWED_ORIGINS.includes(origin);
+}
+
+function safeJsonParse(s: string): unknown {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
+}
+
+function redactPayload(payload: unknown): unknown {
+  if (!payload || typeof payload !== 'object') return payload;
+
+  const SENSITIVE_KEYS = new Set([
+    'authorization',
+    'token',
+    'access_token',
+    'refresh_token',
+    'api_key',
+    'apikey',
+    'password',
+    'secret',
+    'cookie',
+  ]);
+
+  const walk = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(walk);
+    if (!v || typeof v !== 'object') return v;
+
+    const rec = v as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(rec)) {
+      const lower = k.toLowerCase();
+      if (SENSITIVE_KEYS.has(lower)) {
+        out[k] = '[REDACTED]';
+      } else {
+        out[k] = walk(val);
+      }
+    }
+    return out;
+  };
+
+  return walk(payload);
+}
+
+async function writeRequestLog(info: {
+  route: string;
+  method: string;
+  tsIso: string;
+  headers: Record<string, string>;
+  bodyText: string;
+}) {
+  const cwd = process.cwd();
+  const dir = path.isAbsolute(LOG_DIR) ? LOG_DIR : path.join(cwd, LOG_DIR);
+  await fs.mkdir(dir, { recursive: true });
+
+  const safeHeaders = { ...info.headers };
+  if (safeHeaders['authorization']) safeHeaders['authorization'] = '[REDACTED]';
+
+  const parsed = safeJsonParse(info.bodyText);
+  const redacted = redactPayload(parsed);
+
+  const bodyOut = parsed ? JSON.stringify(redacted, null, 2) : info.bodyText;
+
+  const record = {
+    ts: info.tsIso,
+    route: info.route,
+    method: info.method,
+    headers: safeHeaders,
+    body: bodyOut,
+  };
+
+  const stamp = info.tsIso.replace(/[:.]/g, '-');
+  const file = path.join(dir, `${stamp}_${info.method}_${info.route.replace(/\//g, '_')}.json`);
+
+  const bytes = Buffer.byteLength(JSON.stringify(record), 'utf8');
+  if (bytes > MAX_LOG_BYTES) {
+    record.body = '[TRUNCATED] payload too large';
+  }
+
+  await fs.writeFile(file, JSON.stringify(record, null, 2), 'utf8');
 }
 
 export async function OPTIONS(req: NextRequest) {
@@ -44,18 +135,35 @@ export async function POST(req: NextRequest) {
   const auth = req.headers.get('authorization');
   if (auth) forwardHeaders['Authorization'] = auth;
 
-  // Forward the request body as a stream to the backend and stream the response back
-  // Note: Node's fetch requires the `duplex: 'half'` option when sending a ReadableStream as the body.
-  // TypeScript's RequestInit doesn't include `duplex` by default, so create a small
-  // extension type to include it and avoid using `any`.
+  // Read full body for logging + forwarding.
+  // Note: This buffers the request. For local debugging it's acceptable.
+  const bodyText = await req.text();
+
+  if (ENABLE_REQUEST_LOGS) {
+    const headerObj: Record<string, string> = {};
+    req.headers.forEach((v, k) => {
+      headerObj[k.toLowerCase()] = v;
+    });
+
+    // Fire-and-forget log write (do not block response).
+    writeRequestLog({
+      route: 'api_proxy',
+      method: 'POST',
+      tsIso: new Date().toISOString(),
+      headers: headerObj,
+      bodyText,
+    }).catch(() => {
+      // ignore
+    });
+  }
+
+  // Forward the request body to the backend and stream the response back.
   type FetchWithDuplex = RequestInit & { duplex?: 'half' };
 
   const init: FetchWithDuplex = {
     method: 'POST',
     headers: forwardHeaders,
-    // req.body in the app router is a readable stream - forward it directly
-    body: req.body as unknown as BodyInit,
-    duplex: 'half',
+    body: bodyText,
   };
 
   const backendRes = await fetch(backendUrl, init);
