@@ -1,5 +1,5 @@
 // lib/sseClient.ts
-import { ChatMessage, ChatRouteEvent, LangGraphPathEvent, ObservabilitySnapshot } from '@/types/chat';
+import { ChatRouteEvent, LangGraphPathEvent, ObservabilitySnapshot } from '@/types/chat';
 import { normalizeContextDebugV172 } from '@/types/contextDebug_v1_7_2';
 
 // NOTE: In the browser we always go through the Next.js proxy route so we don't
@@ -245,28 +245,19 @@ export type ChatRequestContext = {
 
 export async function streamChat(
   message: string,
-  history: ChatMessage[],
   callbacks: StreamCallbacks,
   context: ChatRequestContext
 ): Promise<void> {
   const { onContent, onReasoning, onRoute, onAgent, onObservability, onFirstToken, onError, onComplete } = callbacks;
 
   try {
-    // Convert chat history to the format expected by the API
-    // The API expects an array of message strings in a conversational format
-    const messageHistory = history.map((msg) => {
-      if (msg.role === 'user') {
-        return `User: ${msg.content}`;
-      }
-      // assistant
-      return `Assistant: ${msg.content}`;
-    });
+    // NOTE: Multi-turn history is handled by the backend keyed by identity fields.
+    // We intentionally do NOT send `messages` (history) from the frontend.
 
-    // Build request body matching OpenAPI specification
+    // Build request body matching backend expectations
     const requestBody: Record<string, unknown> = {
       user: message,
       stream: true,
-      messages: messageHistory,
       conversation_id: context.conversationId,
       conversation_root_id: context.conversationRootId ?? context.conversationId,
       session_id: context.sessionId,
