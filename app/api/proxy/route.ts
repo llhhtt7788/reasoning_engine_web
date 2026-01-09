@@ -90,7 +90,8 @@ async function writeRequestLog(info: {
   };
 
   const stamp = info.tsIso.replace(/[:.]/g, '-');
-  const file = path.join(dir, `${stamp}_${info.method}_${info.route.replace(/\//g, '_')}.json`);
+  const safeRoute = info.route.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const file = path.join(dir, `${stamp}_${info.method}_${safeRoute}.json`);
 
   const bytes = Buffer.byteLength(JSON.stringify(record), 'utf8');
   if (bytes > MAX_LOG_BYTES) {
@@ -137,7 +138,12 @@ export async function POST(req: NextRequest) {
 
   // Read full body for logging + forwarding.
   // Note: This buffers the request. For local debugging it's acceptable.
-  const bodyText = await req.text();
+  let bodyText = await req.text();
+
+  // Truncate extremely large payloads (both to protect logs and memory usage)
+  if (bodyText.length > MAX_LOG_BYTES) {
+    bodyText = bodyText.slice(0, MAX_LOG_BYTES);
+  }
 
   if (ENABLE_REQUEST_LOGS) {
     const headerObj: Record<string, string> = {};
@@ -145,9 +151,17 @@ export async function POST(req: NextRequest) {
       headerObj[k.toLowerCase()] = v;
     });
 
+    const route = (() => {
+      try {
+        return new URL(req.url).pathname.replace(/^\//, '');
+      } catch {
+        return 'api_proxy';
+      }
+    })();
+
     // Fire-and-forget log write (do not block response).
     writeRequestLog({
-      route: 'api_proxy',
+      route,
       method: 'POST',
       tsIso: new Date().toISOString(),
       headers: headerObj,

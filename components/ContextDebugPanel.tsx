@@ -394,15 +394,19 @@ export const ContextDebugPanel: React.FC<ContextDebugPanelProps> = ({
         <div className="border-t border-gray-200 pt-3">
           <CollapsibleSection title="Intent & Policy" defaultOpen>
             <IntentPolicyBlock
-              intent={debugTyped?.intent ? ({
-                name: debugTyped.intent.type,
-                confidence: debugTyped.intent.confidence,
-                // keep other v1.7.0 fields undefined
-              } as any) : undefined}
-              contextPolicy={debugTyped?.context_strategy ? ({
-                use_context: debugTyped.context_strategy.use_context,
-                source: typeof debugTyped.context_strategy.source === 'string' ? debugTyped.context_strategy.source : undefined,
-              } as any) : undefined}
+              intent={debugTyped?.intent && typeof debugTyped.intent.confidence === 'number'
+                ? {
+                  name: debugTyped.intent.type,
+                  confidence: debugTyped.intent.confidence,
+                }
+                : undefined}
+              contextPolicy={debugTyped?.context_strategy
+                && (debugTyped.context_strategy.source === 'config' || debugTyped.context_strategy.source === 'default_fallback')
+                ? {
+                  use_context: debugTyped.context_strategy.use_context,
+                  source: debugTyped.context_strategy.source,
+                }
+                : undefined}
               contextExecution={debugTyped?.context_execution?.mode}
               // legacy fallback (if backend still sends top-level skip_reason)
               skipReason={debugTyped?.context_execution?.skip_reason

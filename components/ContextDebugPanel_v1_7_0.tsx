@@ -143,8 +143,8 @@ export const ContextDebugPanelV170: React.FC<ContextDebugPanelV170Props> = ({
   highlightNodeName,
 }) => {
   const snapshot = observability;
-  if (!turnId && !snapshot) return null;
 
+  // Keep hooks before any early return to satisfy react-hooks/rules-of-hooks.
   const taskType = snapshot?.task_type
     ?? (snapshot?.turn_meta && typeof snapshot.turn_meta['task_type'] === 'string'
       ? (snapshot.turn_meta['task_type'] as string)
@@ -173,6 +173,7 @@ export const ContextDebugPanelV170: React.FC<ContextDebugPanelV170Props> = ({
   const embeddingUsed = asBool(debugRaw?.['embedding_used']);
   const rerankUsed = asBool(debugRaw?.['rerank_used']);
   const recalledCount = asNumber(debugRaw?.['recalled_count']);
+
   const injectedIds = useMemo(() => toIdList(debugRaw?.['injected_memory_ids']), [debugRaw]);
 
   // Backend Status
@@ -225,6 +226,8 @@ export const ContextDebugPanelV170: React.FC<ContextDebugPanelV170Props> = ({
     if (embeddingUsed === false && rerankUsed === false) return 'No embedding / no rerank';
     return '—';
   }, [contextSkipped, embeddingUsed, rerankUsed]);
+
+  if (!turnId && !snapshot) return null;
 
   return (
     <section className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 space-y-3">

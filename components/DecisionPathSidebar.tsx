@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useChatStore } from '@/store/chatStore';
 import { aggregateNodeRuns } from '@/lib/langgraphRuns';
 import { LangGraphTimeline } from './LangGraphTimeline';
@@ -65,6 +66,16 @@ export const DecisionPathSidebar: React.FC = () => {
               当前 turn：{current?.turn_id ? <span className="font-mono break-all">{current.turn_id}</span> : '—'}
             </div>
           </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Link
+            href="/context/selection-proxy"
+            className="inline-flex items-center rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+            title="打开 Selection Proxy 分析（/api/context/memory/selection_counts）"
+          >
+            Selection Proxy 分析
+          </Link>
         </div>
       </div>
 
