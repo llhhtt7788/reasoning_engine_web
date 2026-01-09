@@ -152,7 +152,6 @@ export const ChatContainer: React.FC = () => {
 
         await streamChat(
             message,
-            messages,
             {
                 onRoute: (route) => {
                     setLastAssistantRoute(route);
