@@ -169,3 +169,45 @@
 - `method`
 - `headers`（已脱敏）
 - `body`（已脱敏；若不是 JSON 则保存原始文本）
+
+---
+
+## 9. w.2.0.0 归档：Knowledge Upload MVP（Upload → stored → 可回显/可审计）
+
+> 时间：2026-01
+> 
+> 本段用于归档 w.2.0.0 前端对齐实现（与后端 Upload MVP 对齐），并记录关键落地文件，便于后续回查。
+
+### 9.1 范围
+
+**In Scope**
+- 左侧工作台（`DecisionPathSidebar`）顶部新增 `📤 Knowledge Upload`
+- 固定对齐后端：`POST /api/knowledge/documents/upload`（multipart/form-data）
+- 上传成功后展示完整 response JSON（前端不推断、不补字段）
+- 联调调试：把 POST 请求写入 `logs/`（可开关）
+  - `/api/proxy`（chat SSE 代理）
+  - `/api/knowledge/documents/upload`（upload 代理）
+
+**Out of Scope**
+- Recall/Chunks/Rerank 调度可视化
+- 上传进度/轮询/Job
+- 删除/编辑/权限
+
+### 9.2 关键实现（Files）
+
+- `components/KnowledgeUploadPanel.tsx`
+  - 左侧上传 UI：file + tags（逗号分隔）+ 上传按钮 + response 回显
+- `lib/knowledgeUpload.ts`
+  - 前端上传方法：`fetch('/api/knowledge/documents/upload')`，使用 `FormData`
+- `types/knowledge.ts`
+  - `KnowledgeUploadResponse` 类型定义
+- `app/api/knowledge/documents/upload/route.ts`
+  - Next.js 代理：把 multipart 转发到后端同路径，并在开启开关时落盘日志（只写摘要，不保存二进制）
+- `lib/requestLogging.ts`
+  - 抽出的共享 request logging 工具（供 `/api/proxy` 与 upload 代理复用）
+
+### 9.3 环境变量（Request Logging）
+
+- `ENABLE_REQUEST_LOGS=1 | true`：开启写日志（默认关闭）
+- `REQUEST_LOG_DIR=logs`：日志目录
+- `REQUEST_LOG_MAX_BYTES=262144`：最大日志大小（默认 256KB）

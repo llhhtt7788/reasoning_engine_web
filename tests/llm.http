@@ -60,3 +60,37 @@ Content-Type: application/json
 
 ### Get Langgraph path
 GET http://127.0.0.1:11211/api/v1/langgraph/path?turn_id=019b7dc51283-80fde75a16c636b3%3A10&conversation_id=9fb1750e61dec9c11b8ee2dbe865fc74691a149a288a4aacf9a0f616b4b398ae&session_id=019b7dc51283-80fde75a16c636b3&max_lines=5000
+
+
+
+###
+GET http://127.0.0.1:11211/api/knowledge/citations/turn
+Content-Type: application/json
+
+{
+  "turn_id": "08eb8898-45cd-455c-8678-aa8a26c777e6:2",
+  "date": "2026-01-11",
+  "used": true,
+  "scope": "app",
+  "top_k": 8,
+  "candidates": 30,
+  "selected": 5,
+  "budget_tokens": 19200,
+  "used_tokens": 820,
+  "reason": null,
+  "snippets": [
+    {
+      "chunk_id": "c_...",
+      "document_id": "d_...",
+      "upload_id": "u_...",
+      "title": "xxx.pdf",
+      "chunk_index": 12,
+      "page_start": 5,
+      "page_end": 6,
+      "content": "...",
+      "content_tokens": 120,
+      "tags": ["guideline"],
+      "scores": {"vector": 0.83, "rerank": null, "final": 0.83}
+    }
+  ]
+}

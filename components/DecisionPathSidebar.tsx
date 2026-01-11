@@ -7,6 +7,8 @@ import { aggregateNodeRuns } from '@/lib/langgraphRuns';
 import { LangGraphTimeline } from './LangGraphTimeline';
 import { fetchLangGraphPathReplay } from '@/lib/langgraphReplay';
 import { LangGraphPathPanelV170 } from './LangGraphPathPanel_v1_7_0';
+import { KnowledgeUploadPanel } from './KnowledgeUploadPanel';
+import { KnowledgeUploadsListPanel } from './KnowledgeUploadsListPanel';
 
 export const DecisionPathSidebar: React.FC = () => {
   const { messages, selectedDecisionNode, setSelectedDecisionNode, setLangGraphPathEvents } = useChatStore();
@@ -80,6 +82,14 @@ export const DecisionPathSidebar: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <KnowledgeUploadPanel
+          onUploaded={() => {
+            // notify list panel to refresh
+            window.dispatchEvent(new CustomEvent('knowledgeUploads:changed'));
+          }}
+        />
+        <KnowledgeUploadsListPanel />
+
         {replayError ? (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 whitespace-pre-wrap break-words">
             路径回放加载失败：{replayError}
