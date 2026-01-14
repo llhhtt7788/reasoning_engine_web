@@ -11,6 +11,10 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // Force Turbopack to treat this folder as the project root to avoid picking parent lockfiles.
+  turbopack: {
+    root: __dirname,
+  },
 };
 
 export default nextConfig;
