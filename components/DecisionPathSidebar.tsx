@@ -83,7 +83,7 @@ export const DecisionPathSidebar: React.FC = () => {
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         <KnowledgeUploadPanel
-          onUploaded={() => {
+          onUploadedAction={() => {
             // notify list panel to refresh
             window.dispatchEvent(new CustomEvent('knowledgeUploads:changed'));
           }}

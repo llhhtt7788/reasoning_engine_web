@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KnowledgeUpload, UploadStatus } from '@/types/knowledge';
 import { listKnowledgeUploads } from '@/lib/knowledgeUpload';
+import { resolveIdentityDefaults } from '@/lib/identityDefaults';
 
 const TERMINAL: ReadonlySet<UploadStatus> = new Set(['indexed', 'failed']);
 
 export type KnowledgeUploadsPollingOptions = {
-  userId: string;
+  userId?: string;
   limit?: number;
   offset?: number;
 
@@ -46,7 +47,9 @@ export function useKnowledgeUploadsPolling(opts: KnowledgeUploadsPollingOptions)
     maxDurationMs = 5 * 60_000,
   } = opts;
 
-  const stableKey = useMemo(() => `${userId}::${limit}::${offset}`, [userId, limit, offset]);
+  const effectiveUserId = useMemo(() => resolveIdentityDefaults({ userId }).user_id, [userId]);
+
+  const stableKey = useMemo(() => `${effectiveUserId}::${limit}::${offset}`, [effectiveUserId, limit, offset]);
 
   const [items, setItems] = useState<KnowledgeUpload[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -77,13 +80,13 @@ export function useKnowledgeUploadsPolling(opts: KnowledgeUploadsPollingOptions)
   );
 
   const refresh = useCallback(async () => {
-    if (!userId) return;
+    if (!effectiveUserId) return;
     if (inFlightRef.current) return inFlightRef.current;
 
     const run = (async () => {
       try {
         setError(null);
-        const resp = await listKnowledgeUploads({ userId, limit, offset });
+        const resp = await listKnowledgeUploads({ userId: effectiveUserId, limit, offset });
         const nextItems = resp.items ?? [];
         setItems(nextItems);
         setLastUpdatedAt(Date.now());
@@ -124,7 +127,7 @@ export function useKnowledgeUploadsPolling(opts: KnowledgeUploadsPollingOptions)
 
     inFlightRef.current = run;
     return run;
-  }, [userId, limit, offset, fastMs, fastWindowMs, slowMs, maxDurationMs, schedule]);
+  }, [effectiveUserId, limit, offset, fastMs, fastWindowMs, slowMs, maxDurationMs, schedule]);
 
   useEffect(() => {
     startRef.current = Date.now();
@@ -142,10 +145,8 @@ export function useKnowledgeUploadsPolling(opts: KnowledgeUploadsPollingOptions)
   }, [stableKey]);
 
   const polling = useMemo(() => {
-    if (timerRef.current) return true;
-    return false;
-  }, [lastUpdatedAt, items.length]);
+    return !!timerRef.current;
+  }, []);
 
   return { items, loading, error, lastUpdatedAt, polling, refresh };
 }
-

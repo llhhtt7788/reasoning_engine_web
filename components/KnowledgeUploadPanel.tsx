@@ -4,9 +4,10 @@ import React, { useMemo, useRef, useState } from 'react';
 import type { KnowledgeUploadResponse } from '@/types/knowledge';
 import { uploadKnowledgeDocument } from '@/lib/knowledgeUpload';
 import { useIdentityStore } from '@/store/identityStore';
+import { resolveIdentityDefaults } from '@/lib/identityDefaults';
 
 export type KnowledgeUploadPanelProps = {
-  onUploaded?: (resp: KnowledgeUploadResponse) => void;
+  onUploadedAction?: (resp: KnowledgeUploadResponse) => void;
 };
 
 function scannedPdfHint(err?: string | null): boolean {
@@ -70,9 +71,12 @@ function mapUploadError(err?: string | null): { title: string; body: string; raw
   };
 }
 
-export const KnowledgeUploadPanel: React.FC<KnowledgeUploadPanelProps> = ({ onUploaded }) => {
+export const KnowledgeUploadPanel: React.FC<KnowledgeUploadPanelProps> = ({ onUploadedAction }) => {
   const userId = useIdentityStore((s) => s.userId);
+  const appIdFromStore = useIdentityStore((s) => s.appId);
   const conversationId = useIdentityStore((s) => s.conversationId);
+
+  const effectiveIdentity = useMemo(() => resolveIdentityDefaults({ userId, appId: appIdFromStore }), [userId, appIdFromStore]);
 
   const [tagsText, setTagsText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -95,12 +99,13 @@ export const KnowledgeUploadPanel: React.FC<KnowledgeUploadPanelProps> = ({ onUp
     try {
       const resp = await uploadKnowledgeDocument({
         file,
-        userId,
+        userId: effectiveIdentity.user_id,
+        appId: effectiveIdentity.app_id,
         conversationId,
         tags,
       });
       setResult(resp);
-      onUploaded?.(resp);
+      onUploadedAction?.(resp);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -160,7 +165,10 @@ export const KnowledgeUploadPanel: React.FC<KnowledgeUploadPanelProps> = ({ onUp
         </button>
 
         <div className="text-[11px] text-gray-500">
-          user_id: <span className="font-mono text-gray-700 break-all">{userId}</span>
+          user_id: <span className="font-mono text-gray-700 break-all">{effectiveIdentity.user_id}</span>
+        </div>
+        <div className="text-[11px] text-gray-500">
+          app_id: <span className="font-mono text-gray-700 break-all">{effectiveIdentity.app_id}</span>
         </div>
         <div className="text-[11px] text-gray-500">
           conversation_id: <span className="font-mono text-gray-700 break-all">{conversationId}</span>

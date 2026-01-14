@@ -1,19 +1,22 @@
 import type { KnowledgeUpload, KnowledgeUploadResponse, KnowledgeUploadsListResponse } from '@/types/knowledge';
+import { resolveIdentityDefaults } from '@/lib/identityDefaults';
 
 export type KnowledgeUploadInput = {
   file: File;
-  userId: string;
+  userId?: string;
   conversationId?: string;
   appId?: string;
   tags?: string[];
 };
 
 export async function uploadKnowledgeDocument(input: KnowledgeUploadInput): Promise<KnowledgeUploadResponse> {
+  const { user_id, app_id } = resolveIdentityDefaults({ userId: input.userId, appId: input.appId });
+
   const form = new FormData();
   form.append('file', input.file);
-  form.append('user_id', input.userId);
+  form.append('user_id', user_id);
   if (input.conversationId) form.append('conversation_id', input.conversationId);
-  if (input.appId) form.append('app_id', input.appId);
+  form.append('app_id', app_id);
   if (input.tags && input.tags.length > 0) form.append('tags', input.tags.join(','));
 
   const res = await fetch('/api/knowledge/documents/upload', {
@@ -30,7 +33,7 @@ export async function uploadKnowledgeDocument(input: KnowledgeUploadInput): Prom
 }
 
 export type ListKnowledgeUploadsInput = {
-  userId: string;
+  userId?: string;
   limit?: number;
   offset?: number;
 };
@@ -52,8 +55,10 @@ function normalizeListResponse(json: unknown): KnowledgeUploadsListResponse {
 }
 
 export async function listKnowledgeUploads(input: ListKnowledgeUploadsInput): Promise<KnowledgeUploadsListResponse> {
+  const { user_id } = resolveIdentityDefaults({ userId: input.userId });
+
   const qs = new URLSearchParams();
-  qs.set('user_id', input.userId);
+  qs.set('user_id', user_id);
   qs.set('limit', String(input.limit ?? 50));
   qs.set('offset', String(input.offset ?? 0));
 
