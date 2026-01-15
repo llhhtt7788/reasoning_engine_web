@@ -5,6 +5,7 @@ import type { KnowledgeUpload, UploadStatus } from '@/types/knowledge';
 import { useKnowledgeUploadsPolling } from '@/lib/useKnowledgeUploadsPolling';
 import { getKnowledgeUploadDetail } from '@/lib/knowledgeUpload';
 import { useIdentityStore } from '@/store/identityStore';
+import { resolveIdentityDefaults } from '@/lib/identityDefaults';
 
 function statusLabel(status: UploadStatus): { text: string; cls: string } {
   switch (status) {
@@ -34,25 +35,26 @@ function fmtBytes(n?: number): string {
 function shortError(err?: string | null): string {
   if (!err) return '';
   const s = String(err);
-  if (s.length <= 80) return s;
-  return `${s.slice(0, 80)}…`;
+  return s.length <= 80 ? s : `${s.slice(0, 80)}…`;
 }
 
 function scannedPdfHint(err?: string | null): boolean {
-  if (!err) return false;
-  return String(err).includes('suspect_scanned_pdf_need_ocr');
+  return !!err && String(err).includes('suspect_scanned_pdf_need_ocr');
 }
 
 function invalidUtf8Hint(err?: string | null): boolean {
   if (!err) return false;
   const s = String(err);
-  return s.includes('invalid byte sequence for encoding "UTF8"') || s.includes('invalid byte sequence for encoding "UTF-8"') || s.includes('invalid byte sequence for encoding UTF8');
+  return (
+    s.includes('invalid byte sequence for encoding "UTF8"') ||
+    s.includes('invalid byte sequence for encoding "UTF-8"') ||
+    s.includes('invalid byte sequence for encoding UTF8')
+  );
 }
 
 function embeddingDimsMismatchHint(err?: string | null): { expected: number; got: number } | null {
   if (!err) return null;
-  const s = String(err);
-  const m = s.match(/expected\s+(\d+)\s+dimensions?,\s+not\s+(\d+)/i);
+  const m = String(err).match(/expected\s+(\d+)\s+dimensions?,\s+not\s+(\d+)/i);
   if (!m) return null;
   const expected = Number(m[1]);
   const got = Number(m[2]);
@@ -92,18 +94,20 @@ function mapFailureMessage(err?: string | null): { title: string; body: string; 
 }
 
 export const KnowledgeUploadsListPanel: React.FC = () => {
-  const userId = useIdentityStore((s) => s.userId);
+  const userIdFromStore = useIdentityStore((s) => s.userId);
+  const effectiveUserId = useMemo(
+    () => resolveIdentityDefaults({ userId: userIdFromStore }).user_id,
+    [userIdFromStore]
+  );
 
-  const { items, loading, error, lastUpdatedAt, polling, refresh } = useKnowledgeUploadsPolling({
-    userId,
+  const { items, loading, error, refresh } = useKnowledgeUploadsPolling({
+    userId: effectiveUserId,
     limit: 30,
     offset: 0,
   });
 
   useEffect(() => {
-    const handler = () => {
-      void refresh();
-    };
+    const handler = () => void refresh();
     window.addEventListener('knowledgeUploads:changed', handler as EventListener);
     return () => window.removeEventListener('knowledgeUploads:changed', handler as EventListener);
   }, [refresh]);
@@ -114,7 +118,6 @@ export const KnowledgeUploadsListPanel: React.FC = () => {
   const [detail, setDetail] = useState<KnowledgeUpload | null>(null);
 
   const sorted = useMemo(() => {
-    // Newest first if created_at exists.
     return [...items].sort((a, b) => {
       const ta = a.created_at ? Date.parse(a.created_at) : 0;
       const tb = b.created_at ? Date.parse(b.created_at) : 0;
@@ -124,13 +127,16 @@ export const KnowledgeUploadsListPanel: React.FC = () => {
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-xs font-semibold text-gray-900">📚 Knowledge Uploads</div>
-        <div className="flex items-center gap-2">
-          <div className="text-[11px] text-gray-500">
-            {loading ? '加载中…' : polling ? '自动刷新中' : '已停止刷新'}
-            {lastUpdatedAt ? ` · ${new Date(lastUpdatedAt).toLocaleTimeString()}` : ''}
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="text-xs font-semibold text-gray-900">📚 Knowledge Uploads</div>
+          <div className="mt-0.5 text-[11px] text-gray-500">
+            user_id: <span className="font-mono text-gray-700 break-all">{effectiveUserId}</span>
           </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="text-[11px] text-gray-500">{loading ? '加载中…' : '就绪'}</div>
           <button
             type="button"
             className="rounded-md px-2 py-1 text-xs border border-gray-200 bg-white hover:bg-gray-50 text-gray-700"
@@ -148,7 +154,7 @@ export const KnowledgeUploadsListPanel: React.FC = () => {
         </div>
       ) : null}
 
-      {sorted.length === 0 && !loading ? (
+      {!loading && sorted.length === 0 ? (
         <div className="rounded-md border border-dashed border-gray-200 bg-gray-50/50 p-2 text-[11px] text-gray-500">
           暂无上传记录。
         </div>
@@ -159,17 +165,19 @@ export const KnowledgeUploadsListPanel: React.FC = () => {
           const st = statusLabel(it.status);
           const isOpen = expandedId === it.upload_id;
           const mapped = it.status === 'failed' ? mapFailureMessage(it.error_message ?? null) : null;
+
           return (
             <div key={it.upload_id} className="rounded-md border border-gray-200 bg-white">
               <div className="p-2">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <div className="text-xs text-gray-900 font-mono break-all">
-                      {it.original_filename ?? it.upload_id}
-                    </div>
+                    <div className="text-xs text-gray-900 font-mono break-all">{it.original_filename ?? it.upload_id}</div>
+
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
                       <span>size: {fmtBytes(it.size_bytes)}</span>
-                      <span>id: <span className="font-mono text-gray-700">{it.upload_id}</span></span>
+                      <span>
+                        id: <span className="font-mono text-gray-700">{it.upload_id}</span>
+                      </span>
                       {it.created_at ? <span>created: {new Date(it.created_at).toLocaleString()}</span> : null}
                     </div>
 
@@ -189,9 +197,10 @@ export const KnowledgeUploadsListPanel: React.FC = () => {
                   </div>
 
                   <div className="flex flex-col items-end gap-2">
-                    <span className={["inline-flex items-center rounded-md border px-2 py-0.5 text-[11px]", st.cls].join(' ')}>
+                    <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] ${st.cls}`}>
                       {st.text}
                     </span>
+
                     <button
                       type="button"
                       className="rounded-md px-2 py-1 text-xs border border-gray-200 bg-white hover:bg-gray-50 text-gray-700"
@@ -233,10 +242,18 @@ export const KnowledgeUploadsListPanel: React.FC = () => {
                           stored_path: <span className="font-mono break-all">{detail.stored_path ?? '—'}</span>
                         </div>
                         <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                          <div>page_count: <span className="font-mono">{detail.page_count ?? '—'}</span></div>
-                          <div>chunk_count: <span className="font-mono">{detail.chunk_count ?? '—'}</span></div>
-                          <div>embedding_model: <span className="font-mono break-all">{detail.embedding_model ?? '—'}</span></div>
-                          <div>embedding_dims: <span className="font-mono">{detail.embedding_dims ?? '—'}</span></div>
+                          <div>
+                            page_count: <span className="font-mono">{detail.page_count ?? '—'}</span>
+                          </div>
+                          <div>
+                            chunk_count: <span className="font-mono">{detail.chunk_count ?? '—'}</span>
+                          </div>
+                          <div>
+                            embedding_model: <span className="font-mono break-all">{detail.embedding_model ?? '—'}</span>
+                          </div>
+                          <div>
+                            embedding_dims: <span className="font-mono">{detail.embedding_dims ?? '—'}</span>
+                          </div>
                         </div>
 
                         {detail.status === 'failed' && detail.error_message ? (

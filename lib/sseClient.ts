@@ -1,6 +1,7 @@
 // lib/sseClient.ts
 import { ChatRouteEvent, LangGraphPathEvent, ObservabilitySnapshot } from '@/types/chat';
 import { normalizeContextDebugV172 } from '@/types/contextDebug_v1_7_2';
+import { resolveIdentityDefaults } from '@/lib/identityDefaults';
 
 // NOTE: In the browser we always go through the Next.js proxy route so we don't
 // fight CORS/SSE restrictions. The proxy itself forwards to NEXT_PUBLIC_API_URL.
@@ -254,6 +255,8 @@ export async function streamChat(
     // NOTE: Multi-turn history is handled by the backend keyed by identity fields.
     // We intentionally do NOT send `messages` (history) from the frontend.
 
+    const identity = resolveIdentityDefaults({ userId: ENV_CONFIG.userId, appId: ENV_CONFIG.appId });
+
     // Build request body matching backend expectations
     const requestBody: Record<string, unknown> = {
       user: message,
@@ -261,14 +264,16 @@ export async function streamChat(
       conversation_id: context.conversationId,
       conversation_root_id: context.conversationRootId ?? context.conversationId,
       session_id: context.sessionId,
+
+      // PRD-required identity fields (snake_case)
+      user_id: identity.user_id,
+      app_id: identity.app_id,
     };
 
     // Add optional fields from cached environment configuration
     if (ENV_CONFIG.systemPrompt) requestBody.system = ENV_CONFIG.systemPrompt;
     if (ENV_CONFIG.llmIndex !== undefined) requestBody.llm_index = ENV_CONFIG.llmIndex;
     if (ENV_CONFIG.tenantId) requestBody.tenant_id = ENV_CONFIG.tenantId;
-    if (ENV_CONFIG.userId) requestBody.user_id = ENV_CONFIG.userId;
-    if (ENV_CONFIG.appId) requestBody.app_id = ENV_CONFIG.appId;
     if (ENV_CONFIG.threadId) requestBody.thread_id = ENV_CONFIG.threadId;
 
     // Force SSE on (chat streaming). Graph tracing happens via /api/v1/langgraph/path.

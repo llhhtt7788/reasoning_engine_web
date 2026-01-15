@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { DEFAULT_APP_ID, DEFAULT_USER_ID } from '@/lib/identityDefaults';
 
 export type IdentityState = {
   userId: string;
@@ -21,23 +22,10 @@ function newClientSessionId(): string {
 }
 
 function initUserId(): string {
-  // Prefer env provided id if present; otherwise generate a stable fallback and persist.
-  const env = process.env.NEXT_PUBLIC_USER_ID;
-  if (env && env.trim()) return env.trim();
-
-  if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
-    return 'unknown_user';
-  }
-
-  const KEY = 'langgraph.user_id';
-  const existing = localStorage.getItem(KEY);
-  if (existing) return existing;
-
-  const fresh = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
-    ? crypto.randomUUID()
-    : `user_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-  localStorage.setItem(KEY, fresh);
-  return fresh;
+  // PRD: default user_id = 10001, and allow env override for multi-dev debugging.
+  const env = (process.env.NEXT_PUBLIC_USER_ID ?? '').trim();
+  if (env) return env;
+  return DEFAULT_USER_ID;
 }
 
 function initConversationId(userId: string): string {
@@ -61,7 +49,7 @@ export const useIdentityStore = create<IdentityState>((set) => {
   return {
     userId,
     tenantId: process.env.NEXT_PUBLIC_TENANT_ID,
-    appId: process.env.NEXT_PUBLIC_APP_ID,
+    appId: (process.env.NEXT_PUBLIC_APP_ID ?? '').trim() || DEFAULT_APP_ID,
 
     conversationId,
     conversationRootId: userId,
