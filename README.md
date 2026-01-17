@@ -1,4 +1,22 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Med-Go 推理工作台
+
+**最新版本**: w.2.5.0 (ChatGPT 风格布局)  
+**更新日期**: 2026-01-17
+
+Med-Go 推理工作台是一个基于 Next.js 的 AI 推理引擎前端，支持多对话管理、智能推理展示、知识文档上传等功能。
+
+## ✨ v2.5.0 新特性
+
+- 🎨 **全新 ChatGPT 风格界面** - 简洁、专注、高效
+- 💬 **Session 管理** - 多对话历史、快速切换、自动保存
+- 🧠 **智能 Reasoning 面板** - 深度推理时自动展开，简单问题自动隐藏
+- 📎 **拖拽上传** - 拖拽文件到左侧栏即可上传知识文档
+- 💾 **本地持久化** - 刷新页面不丢失数据
+
+👉 [查看完整功能列表](docs/v2/w.2.5.0_.md)  
+👉 [用户使用指南](docs/v2/w.2.5.0_user_guide.md)
+
+---
 
 ## Getting Started
 

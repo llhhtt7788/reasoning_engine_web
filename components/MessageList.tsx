@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import ReactMarkdown, { Components } from 'react-markdown';
+import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
@@ -18,10 +18,34 @@ export const MessageList: React.FC<MessageListProps> = ({ messages, showMetaPane
   void showMetaPanels;
 
   const bottomRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const prevMessagesLength = useRef(0);
+
   const [nowMs, setNowMs] = useState(() => Date.now());
 
+  // 滚动逻辑：每轮对话时将用户提问置顶
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const currentLength = messages.length;
+    const isNewMessage = currentLength > prevMessagesLength.current;
+    const lastMessage = messages[currentLength - 1];
+
+    if (isNewMessage && lastMessage && lastMessage.role === 'user') {
+      // 用户提问 - 置顶到视口顶部
+      setTimeout(() => {
+        const messageEl = document.getElementById(`message-${currentLength - 1}`);
+        if (messageEl && containerRef.current) {
+          // 直接设置 scrollTop 确保精确定位
+          const container = containerRef.current;
+          const messageTop = messageEl.offsetTop;
+          container.scrollTo({
+            top: messageTop - 20, // 留 20px 上边距
+            behavior: 'smooth'
+          });
+        }
+      }, 100);
+    }
+
+    prevMessagesLength.current = currentLength;
   }, [messages]);
 
   useEffect(() => {
@@ -30,7 +54,11 @@ export const MessageList: React.FC<MessageListProps> = ({ messages, showMetaPane
   }, []);
 
   return (
-      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6 scroll-smooth">
+      <div
+        ref={containerRef}
+        className="h-full w-full overflow-y-auto overflow-x-hidden px-4 py-6 space-y-6"
+        style={{ scrollBehavior: 'smooth' }}
+      >
         {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 pb-20">
               <p className="text-xl font-medium text-gray-500">开始对话</p>
@@ -43,7 +71,6 @@ export const MessageList: React.FC<MessageListProps> = ({ messages, showMetaPane
           const bubbleAlign = isUser ? 'ml-auto' : 'mr-auto';
 
           const inferredMode = message.meta?.inferredMode;
-          // 只有当非用户消息、是深度思考模式、且(内容为空 或 处于预提示等待期)时显示提示
           const showPreHint =
               !isUser &&
               inferredMode === 'deep' &&
@@ -52,21 +79,21 @@ export const MessageList: React.FC<MessageListProps> = ({ messages, showMetaPane
 
           const assistantBorder = !isUser
               ? inferredMode === 'deep'
-                  ? 'border-l-4 border-l-indigo-400 pl-1' // 加宽边框使其更明显
+                  ? 'border-l-4 border-l-indigo-400 pl-1'
                   : 'border-l-0'
               : '';
 
           return (
-              <div key={index} className="flex flex-col">
+              <div key={index} id={`message-${index}`} className="flex flex-col scroll-mt-6">
                 <div
                     data-mode={inferredMode}
                     className={[
-                      'relative px-5 py-3.5 shadow-sm max-w-[90%] md:max-w-[85%]', // 略微增加最大宽度
-                      'rounded-2xl text-[15px] leading-7', // 调整基础字号和行高
+                      'relative px-5 py-3.5 shadow-sm max-w-[90%] md:max-w-[85%]',
+                      'rounded-2xl text-[15px] leading-7',
                       bubbleAlign,
                       isUser
-                          ? 'bg-blue-600 text-white rounded-tr-sm' // 用户气泡：纯色背景，右上角直角
-                          : 'bg-white border border-gray-100 text-gray-800 rounded-tl-sm', // AI气泡：左上角直角
+                          ? 'bg-blue-600 text-white rounded-tr-sm'
+                          : 'bg-white border border-gray-100 text-gray-800 rounded-tl-sm',
                       assistantBorder,
                     ].join(' ')}
                 >
@@ -77,28 +104,18 @@ export const MessageList: React.FC<MessageListProps> = ({ messages, showMetaPane
                       </div>
                   )}
 
-                  {/* 这里移除了 prose 类，完全完全自定义组件样式。
-                  这样可以精确控制间距，避免 prose 默认的大 margin。
-              */}
                   <div className="markdown-body">
                     <ReactMarkdown
                         remarkPlugins={[remarkGfm, [remarkMath, { singleDollarTextMath: true }]]}
                         rehypePlugins={[rehypeKatex]}
                         components={{
-                          // 文本段落：减少下边距，最后一段无边距
                           p: ({ children }) => <p className="mb-2 last:mb-0 break-words">{children}</p>,
-
-                          // 标题：大幅压缩默认的上下间距
                           h1: ({ children }) => <h1 className="text-lg font-bold mt-4 mb-2">{children}</h1>,
                           h2: ({ children }) => <h2 className="text-base font-bold mt-3 mb-2">{children}</h2>,
                           h3: ({ children }) => <h3 className="text-sm font-bold mt-2 mb-1">{children}</h3>,
-
-                          // 列表：紧凑布局
                           ul: ({ children }) => <ul className="list-disc pl-5 mb-2 space-y-1">{children}</ul>,
                           ol: ({ children }) => <ol className="list-decimal pl-5 mb-2 space-y-1">{children}</ol>,
                           li: ({ children }) => <li className="pl-1">{children}</li>,
-
-                          // 引用：优化样式
                           blockquote: ({ children }) => (
                               <blockquote
                                   className={`border-l-4 pl-3 py-1 my-2 text-sm italic ${
@@ -108,8 +125,6 @@ export const MessageList: React.FC<MessageListProps> = ({ messages, showMetaPane
                                 {children}
                               </blockquote>
                           ),
-
-                          // 代码块 (Block)
                           pre: ({ children }) => (
                               <pre
                                   className={`p-3 rounded-lg my-3 overflow-x-auto text-xs font-mono border ${
@@ -121,8 +136,6 @@ export const MessageList: React.FC<MessageListProps> = ({ messages, showMetaPane
                         {children}
                       </pre>
                           ),
-
-                          // 行内代码 (Inline)
                           code: ({ node, inline, className, children, ...props }: any) => {
                             if (inline) {
                               return (
@@ -140,8 +153,6 @@ export const MessageList: React.FC<MessageListProps> = ({ messages, showMetaPane
                             }
                             return <code className={className} {...props}>{children}</code>;
                           },
-
-                          // 表格：增加外层包裹以支持滚动，优化边框
                           table: ({ children }) => (
                               <div className="my-3 overflow-x-auto rounded-lg border border-gray-200">
                                 <table className="min-w-full divide-y divide-gray-200 text-sm bg-white text-gray-900">
@@ -158,8 +169,6 @@ export const MessageList: React.FC<MessageListProps> = ({ messages, showMetaPane
                           td: ({ children }) => (
                               <td className="px-3 py-2 align-top text-gray-700">{children}</td>
                           ),
-
-                          // 链接
                           a: ({ href, children }) => (
                               <a
                                   href={href}
