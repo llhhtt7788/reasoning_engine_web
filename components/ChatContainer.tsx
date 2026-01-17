@@ -56,6 +56,7 @@ export const ChatContainer: React.FC = () => {
         openDebugDrawer,
         closeDebugDrawer,
         deleteSession,
+        updateCurrentSessionId, // w.2.5.2 fix
     } = useChatStore();
 
     const conversationId = useIdentityStore((s) => s.conversationId);
@@ -194,6 +195,17 @@ export const ChatContainer: React.FC = () => {
                     // conversation_id is frontend-controlled in w.1.3.2; keep backend value for display only.
                     if (route.conversation_id && route.conversation_id !== ensuredConversationId) {
                         mergeAssistantMeta({ conversation_id: route.conversation_id });
+
+                        // w.2.5.2 FIX: Update local session ID if backend determines a different one (e.g. backend-generated UUID)
+                        // This prevents creating a "new" session for the 2nd message because we were holding an obsolete frontend ID.
+                        console.log('[ChatContainer] Backend returned new conversation_id:', route.conversation_id);
+                        setConversationId(route.conversation_id);
+                        persistConversationId(route.conversation_id);
+                        if (sessionId) {
+                             // Assuming 1:1 mapping for simplicity if your logic requires it
+                             setSessionId(route.conversation_id);
+                        }
+                        updateCurrentSessionId(route.conversation_id);
                     }
                 },
                 onFirstToken: (tsMs) => {

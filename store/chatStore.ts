@@ -54,7 +54,7 @@ type ChatState = {
   switchSession: (sessionId: string) => void;
   saveCurrentSession: () => void;
   deleteSession: (sessionId: string) => void;
-
+  updateCurrentSessionId: (newId: string) => void; // w.2.5.2: update session ID when backend returns real ID
 
   // ===== w.2.5.0: Right drawer state =====
   isDebugDrawerOpen: boolean;
@@ -349,7 +349,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // Merge with localStorage sessions (prioritize backend)
       const localSessions = loadSessionsFromStorage();
       const backendIds = new Set(backendSessions.map(s => s.id));
-      const localOnlySessions = localSessions.filter(s => !backendIds.has(s.id));
+
+      // Filter out:
+      // 1. Sessions that exist in backend (backend source of truth)
+      // 2. Empty "zombie" sessions (messageCount === 0) that were created locally but never used
+      const localOnlySessions = localSessions.filter(s =>
+        !backendIds.has(s.id) && (s.messageCount > 0)
+      );
 
       // Combine: backend sessions + local-only sessions, sort by lastActivity
       const allSessions = [...backendSessions, ...localOnlySessions].sort(
@@ -365,27 +371,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
     } catch (error) {
       console.error('[chatStore] Failed to load sessions from backend:', error);
-      // Fallback to localStorage only
-      const sessions = loadSessionsFromStorage();
+      // Fallback to localStorage only, but clean up zombies
+      const sessions = loadSessionsFromStorage().filter(s => s.messageCount > 0);
       set({ sessions });
     }
   },
 
   createNewSession: (conversationId: string) => {
-    const newSession: SessionMetadata = {
-      id: conversationId,
-      title: 'New Chat',
-      lastActivity: Date.now(),
-      messageCount: 0,
-    };
-    set((state) => {
-      const sessions = [newSession, ...state.sessions];
-      saveSessionsToStorage(sessions);
-      return {
-        sessions,
-        currentSessionId: conversationId,
-        messages: [],
-      };
+    // Don't add to sessions list immediately!
+    // Wait until first message is sent (handled by saveCurrentSession).
+    // This prevents accumulating empty "New Chat" sessions on every refresh.
+    set({
+      currentSessionId: conversationId,
+      messages: [],
     });
   },
 
@@ -454,6 +452,40 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       return { sessions };
     });
+  },
+
+  updateCurrentSessionId: (newId: string) => {
+    const { currentSessionId, sessions, messages } = get();
+    if (!currentSessionId || currentSessionId === newId) return;
+
+    // 1. Update messages in current state
+    const updatedMessages = messages.map(m => ({
+      ...m,
+      conversation_id: newId,
+      session_id: newId, // Assuming session_id matches conversation_id in this context
+    }));
+
+    // 2. Update session metadata in list
+    const updatedSessions = sessions.map(s => {
+      if (s.id === currentSessionId) {
+        return { ...s, id: newId };
+      }
+      return s;
+    });
+
+    // 3. Move localStorage data: delete old key, save new key
+    deleteSessionStorage(currentSessionId);
+    saveSessionMessages(newId, updatedMessages);
+    saveSessionsToStorage(updatedSessions);
+
+    // 4. Update state
+    set({
+      currentSessionId: newId,
+      sessions: updatedSessions,
+      messages: updatedMessages,
+    });
+
+    console.log(`[chatStore] Updated session ID from ${currentSessionId} to ${newId}`);
   },
 
   // ===== w.2.5.0: Right drawer state =====
