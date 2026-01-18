@@ -15,6 +15,8 @@ import { DeleteSessionConfirmModal } from './DeleteSessionConfirmModal';
 import { persistConversationId } from '@/lib/sessionManager';
 import { INFERENCE_CONFIG, inferMode } from '@/lib/responseInference';
 import { useIdentityStore } from '@/store/identityStore';
+import { useToastStore } from '@/store/toastStore';
+import { mapChatError } from '@/lib/chatErrorMapping';
 
 const MODE_FADE_DELAY_MS = 1400;
 
@@ -59,6 +61,8 @@ export const ChatContainer: React.FC = () => {
         updateCurrentSessionId, // w.2.5.2 fix
     } = useChatStore();
 
+    const pushToast = useToastStore((s) => s.pushToast);
+
     const conversationId = useIdentityStore((s) => s.conversationId);
     const conversationRootId = useIdentityStore((s) => s.conversationRootId);
     const userId = useIdentityStore((s) => s.userId);
@@ -100,6 +104,12 @@ export const ChatContainer: React.FC = () => {
     const firstTokenSeenRef = useRef<boolean>(false);
     const requestStartTsRef = useRef<number>(0);
 
+    // w2.6.0: first token slow warning timer
+    const firstTokenSlowTimerRef = useRef<number | null>(null);
+
+    // w2.6.0: cache last request for retry
+    const lastRequestRef = useRef<{ message: string; conversationId: string; sessionId: string } | null>(null);
+
     useEffect(() => {
         const el = document.getElementById('workbench-root');
         if (!el) return;
@@ -120,6 +130,10 @@ export const ChatContainer: React.FC = () => {
         if (blankWaitTimerRef.current) {
             window.clearTimeout(blankWaitTimerRef.current);
             blankWaitTimerRef.current = null;
+        }
+        if (firstTokenSlowTimerRef.current) {
+            window.clearTimeout(firstTokenSlowTimerRef.current);
+            firstTokenSlowTimerRef.current = null;
         }
     };
 
@@ -144,6 +158,10 @@ export const ChatContainer: React.FC = () => {
             window.clearTimeout(blankWaitTimerRef.current);
             blankWaitTimerRef.current = null;
         }
+        if (firstTokenSlowTimerRef.current) {
+            window.clearTimeout(firstTokenSlowTimerRef.current);
+            firstTokenSlowTimerRef.current = null;
+        }
     };
 
     const handleSend = async (message: string) => {
@@ -160,6 +178,9 @@ export const ChatContainer: React.FC = () => {
 
         const ensuredConversationId = conversationId;
         const ensuredSessionId = sessionId || newClientSessionId();
+
+        // cache for retry
+        lastRequestRef.current = { message, conversationId: ensuredConversationId, sessionId: ensuredSessionId };
 
         if (!sessionId) {
             setSessionId(ensuredSessionId);
@@ -182,6 +203,12 @@ export const ChatContainer: React.FC = () => {
             if (firstTokenSeenRef.current) return;
             mergeLastAssistantMeta({ inferredMode: 'deep' });
         }, INFERENCE_CONFIG.blankWaitHintMs);
+
+        // w2.6.0: If first token takes too long, show an info toast (soft warning).
+        firstTokenSlowTimerRef.current = window.setTimeout(() => {
+            if (firstTokenSeenRef.current) return;
+            pushToast({ type: 'info', message: '响应时间较长，请耐心等待…' });
+        }, 9000);
 
         setStreaming(true);
 
@@ -249,7 +276,24 @@ export const ChatContainer: React.FC = () => {
                 },
                 onError: (error) => {
                     clearInferenceTimers();
-                    updateLastAssistant(`\n\n\u8bf7\u6c42\u5931\u8d25: ${error.message}`);
+
+                    const mapped = mapChatError(error);
+                    pushToast({
+                        type: 'error',
+                        message: `${mapped.title}: ${mapped.message}`,
+                        actionLabel: lastRequestRef.current ? '重试' : undefined,
+                        onAction: lastRequestRef.current
+                            ? () => {
+                                const last = lastRequestRef.current;
+                                if (!last) return;
+                                // Re-send last message (new assistant bubble will be appended)
+                                void handleSend(last.message);
+                            }
+                            : undefined,
+                    });
+
+                    // Keep the assistant bubble empty, but add a small friendly hint for context.
+                    updateLastAssistant('\n\n（请求失败，可点击右下角提示重试）');
                     setStreaming(false);
                     scheduleFadeToIdle();
                 },

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import 'katex/dist/katex.min.css';
+import { ToastHost } from '@/components/ToastHost';
 
 export const metadata: Metadata = {
   title: "Med-Go 推理工作台",
@@ -16,6 +17,7 @@ export default function RootLayout({
     <html lang="zh-CN">
       <body id="workbench-root" className="antialiased med-go-workbench">
         {children}
+        <ToastHost />
       </body>
     </html>
   );
