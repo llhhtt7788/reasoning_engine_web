@@ -9,6 +9,7 @@ import { fetchLangGraphPathReplay } from '@/lib/langgraphReplay';
 import { LangGraphPathPanelV170 } from './LangGraphPathPanel_v1_7_0';
 import { KnowledgeUploadPanel } from './KnowledgeUploadPanel';
 import { KnowledgeUploadsListPanel } from './KnowledgeUploadsListPanel';
+import { NonStreamChatDebugPanel } from './NonStreamChatDebugPanel';
 
 export const DecisionPathSidebar: React.FC = () => {
   const { messages, selectedDecisionNode, setSelectedDecisionNode, setLangGraphPathEvents } = useChatStore();
@@ -89,6 +90,8 @@ export const DecisionPathSidebar: React.FC = () => {
           }}
         />
         <KnowledgeUploadsListPanel />
+
+        <NonStreamChatDebugPanel />
 
         {replayError ? (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 whitespace-pre-wrap break-words">
