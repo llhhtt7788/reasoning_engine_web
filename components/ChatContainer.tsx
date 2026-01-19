@@ -20,7 +20,6 @@ import { mapChatError } from '@/lib/chatErrorMapping';
 
 const MODE_FADE_DELAY_MS = 1400;
 
-
 function newClientSessionId(): string {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
         return crypto.randomUUID();
@@ -70,14 +69,15 @@ export const ChatContainer: React.FC = () => {
     const sessionId = useIdentityStore((s) => s.sessionId);
     const setSessionId = useIdentityStore((s) => s.setSessionId);
     const setConversationId = useIdentityStore((s) => s.setConversationId);
+    const initIdentityFromStorage = useIdentityStore((s) => s.initFromStorage);
 
     // w.2.5.0: Modal states
     const [isUploadsModalOpen, setIsUploadsModalOpen] = useState(false);
     const [sessionToDelete, setSessionToDelete] = useState<SessionMetadata | null>(null);
 
-    // Always refresh session_id on page load (refresh => new).
+    // Hydrate persisted identity on client after mount (no SSR mismatch).
     useEffect(() => {
-        setSessionId(newClientSessionId());
+        initIdentityFromStorage();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 

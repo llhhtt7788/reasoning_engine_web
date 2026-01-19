@@ -11,16 +11,22 @@
   --transition-speed: 0.8s;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/*
+  IMPORTANT:
+  We intentionally do NOT auto-switch themes based on system time / prefers-color-scheme.
+  Auto switching can surprise users and also cause unreadable combinations if a component
+  isn't fully dark-mode-safe.
 
-    /* Edge Aura (dark mode: reduce alpha to avoid foggy/neon feel) */
-    --color-thinking: rgba(255, 77, 79, 0.14);
-    --color-thinking-strong: rgba(255, 77, 79, 0.26);
-    --color-fast: rgba(24, 144, 255, 0.12);
-  }
+  If/when we want dark mode, we can explicitly set it via <html data-theme="dark">.
+*/
+html[data-theme='dark'] {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+
+  /* Edge Aura (dark mode: reduce alpha to avoid foggy/neon feel) */
+  --color-thinking: rgba(255, 77, 79, 0.14);
+  --color-thinking-strong: rgba(255, 77, 79, 0.26);
+  --color-fast: rgba(24, 144, 255, 0.12);
 }
 
 body {

@@ -12,6 +12,12 @@ export type IdentityState = {
 
   setConversationId: (conversationId: string) => void;
   setSessionId: (sessionId: string) => void;
+
+  /**
+   * Client-only hydration: load persisted ids from localStorage after mount.
+   * This avoids SSR/CSR text mismatches (hydration errors).
+   */
+  initFromStorage: () => void;
 };
 
 function newClientSessionId(): string {
@@ -28,23 +34,13 @@ function initUserId(): string {
   return DEFAULT_USER_ID;
 }
 
-function initConversationId(userId: string): string {
-  if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
-    return userId;
-  }
-
-  const KEY = 'langgraph.conversation_id';
-  const existing = localStorage.getItem(KEY);
-  if (existing) return existing;
-
-  // PRD default: conversation_id = user_id
-  localStorage.setItem(KEY, userId);
-  return userId;
-}
-
-export const useIdentityStore = create<IdentityState>((set) => {
+export const useIdentityStore = create<IdentityState>((set, get) => {
   const userId = initUserId();
-  const conversationId = initConversationId(userId);
+
+  // IMPORTANT:
+  // - Keep initial SSR/CSR render stable: conversationId defaults to userId.
+  // - After mount, we may restore from localStorage via initFromStorage().
+  const conversationId = userId;
 
   return {
     userId,
@@ -54,6 +50,19 @@ export const useIdentityStore = create<IdentityState>((set) => {
     conversationId,
     conversationRootId: userId,
     sessionId: newClientSessionId(),
+
+    initFromStorage: () => {
+      if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
+
+      const KEY = 'langgraph.conversation_id';
+      const existing = localStorage.getItem(KEY);
+      if (existing && existing !== get().conversationId) {
+        set({ conversationId: existing });
+      } else if (!existing) {
+        // PRD default: conversation_id = user_id
+        localStorage.setItem(KEY, get().conversationId);
+      }
+    },
 
     setConversationId: (conversationId: string) => {
       set({ conversationId });
