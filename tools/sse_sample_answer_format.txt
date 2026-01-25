@@ -1,0 +1,12 @@
+event: message
+data: {"answer":"你好"}
+
+event: message
+data: {"answer":"，"}
+
+event: message
+data: {"answer":"世界"}
+
+event: message
+data: {}
+

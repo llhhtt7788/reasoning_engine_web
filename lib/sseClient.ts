@@ -59,6 +59,7 @@ interface SSEChoice {
 interface SSEData {
   event?: string;
   choices?: SSEChoice[];
+
   // common optional fields (some backends include them directly)
   agent?: string;
   llm_index?: number;
@@ -304,6 +305,11 @@ export async function streamChat(
     let buffer = '';
     let firstTokenSeen = false;
 
+    // Minimal, early-only control-token filter.
+    // NOTE: Only apply to the first few content chunks to avoid accidentally hiding user-visible text.
+    const CONTROL_TOKENS = new Set(['skip', 'use', 'llm_fast', 'llm_thinking']);
+    let contentChunkCount = 0;
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -368,11 +374,11 @@ export async function streamChat(
           continue;
         }
 
-        // 3) delta content
+        // 3)正文/思考渲染策略：严格只读 OpenAI delta
         const delta = obj.choices?.[0]?.delta;
         if (!delta) continue;
 
-        // Emit agent if embedded in delta
+        // Emit agent if embedded in delta (do NOT treat as正文)
         if (delta.agent && onAgent) {
           onAgent({ event: 'agent', agent: delta.agent, llm_index: llmIndexFromObj });
         }
@@ -381,6 +387,14 @@ export async function streamChat(
         const reasoning = delta.reasoning || delta.reasoning_content || '';
 
         if (content) {
+          contentChunkCount += 1;
+
+          // Early-only filter of known control tokens.
+          const trimmed = content.trim();
+          if (contentChunkCount <= 10 && CONTROL_TOKENS.has(trimmed)) {
+            continue;
+          }
+
           if (!firstTokenSeen) {
             firstTokenSeen = true;
             onFirstToken?.(Date.now());

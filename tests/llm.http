@@ -4,9 +4,14 @@ POST http://127.0.0.1:11211/api/v1/chat/context?sse=true&trace_graph=true
 Content-Type: application/json
 
 {
-  "user": "你是？",
-  "stream": true
+  "user": "分析一下机器学习的基本原理。",
+  "stream": true,
+  "user_id": "10001",
+  "app_id": "app",
+  "conversation_id": "ad98a29b-8812-4353-a8be-591dc1d7eab1",
+  "session_id": "ad98a29b-8812-4353-a8be-591dc1d7eab1"
 }
+
 
 ###embeddings
 POST http://139.196.188.251:9925/v1/embeddings
@@ -33,7 +38,7 @@ Content-Type: application/json
 
 
 ###chat completion
-POST http://139.196.188.251:9903/v1/chat/completions
+POST http://139.196.188.251:9906/v1/chat/completions
 Content-Type: application/json
 
 {

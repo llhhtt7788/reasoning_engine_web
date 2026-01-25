@@ -49,12 +49,11 @@ export async function POST(req: NextRequest) {
 
   // Read full body for logging + forwarding.
   // Note: This buffers the request. For local debugging it's acceptable.
-  let bodyText = await req.text();
+  const bodyTextFull = await req.text();
 
-  // Truncate extremely large payloads (both to protect logs and memory usage)
-  if (bodyText.length > LOG_OPTS.maxBytes) {
-    bodyText = bodyText.slice(0, LOG_OPTS.maxBytes);
-  }
+  // Truncate extremely large payloads ONLY for logging (do not mutate what we forward).
+  const bodyTextForLog =
+    bodyTextFull.length > LOG_OPTS.maxBytes ? bodyTextFull.slice(0, LOG_OPTS.maxBytes) : bodyTextFull;
 
   if (LOG_OPTS.enabled) {
     const headerObj: Record<string, string> = {};
@@ -76,7 +75,7 @@ export async function POST(req: NextRequest) {
       method: 'POST',
       tsIso: new Date().toISOString(),
       headers: headerObj,
-      bodyText,
+      bodyText: bodyTextForLog,
     }).catch(() => {
       // ignore
     });
@@ -88,7 +87,7 @@ export async function POST(req: NextRequest) {
   const init: FetchWithDuplex = {
     method: 'POST',
     headers: forwardHeaders,
-    body: bodyText,
+    body: bodyTextFull,
   };
 
   const backendRes = await fetch(backendUrl, init);
