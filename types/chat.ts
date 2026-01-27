@@ -85,6 +85,10 @@ export type ChatMessage = {
   // Collected decision-path events for this turn (best-effort)
   langgraph_path?: LangGraphPathEvent[];
 
+  // Backend scheduling/execution info (streamed)
+  route?: string;
+  execute?: string;
+
   // Observability snapshot for context debugging
   observability?: ObservabilitySnapshot;
 

@@ -86,6 +86,30 @@ const MessageItem = React.memo<{
                     </div>
                 )}
 
+                {/* Status indicators for route/execute (backend scheduling) */}
+                {!isUser && (message.route || message.execute) && (
+                    <div className="flex items-center flex-wrap gap-2 mb-2 text-xs select-none">
+                        {message.route && (
+                            <span className="px-1.5 py-0.5 rounded-md border border-gray-200 bg-gray-50/80 text-gray-500">
+                                路由：{message.route === 'skip' ? '跳过' : message.route}
+                            </span>
+                        )}
+                        {message.execute && (
+                            <span className={`px-1.5 py-0.5 rounded-md border ${
+                                message.execute === 'llm_thinking'
+                                    ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                                    : 'border-blue-200 bg-blue-50 text-blue-700'
+                            }`}>
+                                执行：{
+                                    message.execute === 'llm_fast' ? '快速' :
+                                    message.execute === 'llm_thinking' ? '思考' :
+                                    message.execute
+                                }
+                            </span>
+                        )}
+                    </div>
+                )}
+
                 <div className="markdown-body">
                     <ReactMarkdown
                         remarkPlugins={[remarkGfm, [remarkMath, { singleDollarTextMath: true }]]}
@@ -213,6 +237,9 @@ const MessageItem = React.memo<{
     // 自定义比较函数：只有内容、角色或时间戳变化时才重新渲染
     return (
         prevProps.message.content === nextProps.message.content &&
+        prevProps.message.reasoning === nextProps.message.reasoning && // Also good to verify reasoning for updates
+        prevProps.message.route === nextProps.message.route &&
+        prevProps.message.execute === nextProps.message.execute &&
         prevProps.message.role === nextProps.message.role &&
         prevProps.index === nextProps.index &&
         prevProps.nowMs === nextProps.nowMs

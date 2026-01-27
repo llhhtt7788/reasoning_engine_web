@@ -136,10 +136,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   return (
                       <div
                           key={session.id}
-                          className={`group relative px-3 py-2.5 rounded-lg cursor-pointer transition-all ${
+                          className={`group relative px-3 py-2.5 rounded-lg cursor-pointer transition-all duration-200 ease-in-out hover:scale-[1.02] ${
                               isCurrent
-                                  ? 'bg-blue-50 border border-blue-200'
-                                  : 'hover:bg-gray-50 border border-transparent'
+                                  ? 'bg-blue-50 border border-blue-200 shadow-sm'
+                                  : 'hover:bg-gray-50 border border-transparent hover:shadow-sm'
                           }`}
                           onClick={() => {
                             if (!isCurrent) {

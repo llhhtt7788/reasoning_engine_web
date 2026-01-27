@@ -4,7 +4,7 @@ POST http://127.0.0.1:11211/api/v1/chat/context?sse=true&trace_graph=true
 Content-Type: application/json
 
 {
-  "user": "分析一下机器学习的基本原理。",
+  "user": "你好。",
   "stream": true,
   "user_id": "10001",
   "app_id": "app",

@@ -27,6 +27,7 @@ type ChatState = {
   isStreaming: boolean;
   addMessage: (msg: ChatMessage) => void;
   updateLastAssistant: (delta: string, reasoning?: string) => void;
+  updateLastAssistantStatus: (status: { route?: string; execute?: string }) => void;
   clearMessages: () => void;
   setStreaming: (streaming: boolean) => void;
 
@@ -138,6 +139,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => ({ messages: [...state.messages, msg] }));
     // w.2.5.0: Auto-save session
     setTimeout(() => get().saveCurrentSession(), 100);
+  },
+  updateLastAssistantStatus: (status) => {
+    set((state) => {
+      const messages = [...state.messages];
+      const lastIndex = messages.length - 1;
+      if (lastIndex >= 0 && messages[lastIndex].role === 'assistant') {
+        const current = messages[lastIndex];
+        // Only update if provided
+        const newRoute = status.route !== undefined ? status.route : current.route;
+        const newExecute = status.execute !== undefined ? status.execute : current.execute;
+
+        if (newRoute !== current.route || newExecute !== current.execute) {
+           messages[lastIndex] = {
+             ...current,
+             route: newRoute,
+             execute: newExecute,
+           };
+           return { messages };
+        }
+      }
+      return {};
+    });
   },
   updateLastAssistant: (delta, reasoning) => {
     set((state) => {

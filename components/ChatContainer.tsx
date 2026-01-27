@@ -40,6 +40,7 @@ export const ChatContainer: React.FC = () => {
         isStreaming,
         addMessage,
         updateLastAssistant,
+        updateLastAssistantStatus, // Add this
         setStreaming,
         setLastAssistantRoute,
         mergeAssistantMeta,
@@ -234,6 +235,12 @@ export const ChatContainer: React.FC = () => {
                         }
                         updateCurrentSessionId(route.conversation_id);
                     }
+                },
+                onRouteStatus: (route) => {
+                    updateLastAssistantStatus({ route });
+                },
+                onExecuteStatus: (execute) => {
+                    updateLastAssistantStatus({ execute });
                 },
                 onFirstToken: (tsMs) => {
                     if (firstTokenSeenRef.current) return;

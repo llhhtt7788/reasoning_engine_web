@@ -33,6 +33,7 @@ export const ToastHost: React.FC = () => {
               'min-w-[240px] max-w-[360px]',
               'rounded-lg shadow-lg ring-1 ring-black/10',
               'text-white',
+              'animate-slide-in-right',
               styles.wrap,
             ].join(' ')}
             role="status"

@@ -30,7 +30,12 @@ const ENV_CONFIG = {
 export type StreamCallbacks = {
   onContent: (content: string) => void;
   onReasoning: (reasoning: string) => void;
+  /** Legacy `event: route` callback, mostly for observability now. */
   onRoute?: (route: ChatRouteEvent) => void;
+  /** New streaming status for route (e.g. "skip") */
+  onRouteStatus?: (status: string) => void;
+  /** New streaming status for execution (e.g. "llm_fast", "llm_thinking") */
+  onExecuteStatus?: (status: string) => void;
   onAgent?: (agent: { event?: 'agent'; agent?: string; llm_index?: number; [k: string]: unknown }) => void;
   // LangGraph trace is no longer emitted by /api/v1/chat/context (moved to replay API)
   // Keep the callback optional for backward compatibility, but we won't invoke it here.
@@ -49,6 +54,8 @@ interface SSEDelta {
   reasoning?: string;
   reasoning_content?: string;
   agent?: string;
+  route?: string;
+  execute?: string;
 }
 
 interface SSEChoice {
@@ -250,7 +257,18 @@ export async function streamChat(
   callbacks: StreamCallbacks,
   context: ChatRequestContext
 ): Promise<void> {
-  const { onContent, onReasoning, onRoute, onAgent, onObservability, onFirstToken, onError, onComplete } = callbacks;
+  const {
+    onContent,
+    onReasoning,
+    onRoute,
+    onRouteStatus,
+    onExecuteStatus,
+    onAgent,
+    onObservability,
+    onFirstToken,
+    onError,
+    onComplete
+  } = callbacks;
 
   try {
     // NOTE: Multi-turn history is handled by the backend keyed by identity fields.
@@ -381,6 +399,14 @@ export async function streamChat(
         // Emit agent if embedded in delta (do NOT treat as正文)
         if (delta.agent && onAgent) {
           onAgent({ event: 'agent', agent: delta.agent, llm_index: llmIndexFromObj });
+        }
+
+        // New: Handle route/execute status
+        if (delta.route && onRouteStatus) {
+            onRouteStatus(delta.route);
+        }
+        if (delta.execute && onExecuteStatus) {
+            onExecuteStatus(delta.execute);
         }
 
         const content = delta.content || '';

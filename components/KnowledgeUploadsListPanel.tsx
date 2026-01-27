@@ -167,7 +167,7 @@ export const KnowledgeUploadsListPanel: React.FC = () => {
           const mapped = it.status === 'failed' ? mapFailureMessage(it.error_message ?? null) : null;
 
           return (
-            <div key={it.upload_id} className="rounded-md border border-gray-200 bg-white">
+            <div key={it.upload_id} className="rounded-md border border-gray-200 bg-white animate-fade-in-up">
               <div className="p-2">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
