@@ -45,6 +45,7 @@ export const ChatContainer: React.FC = () => {
         setLastAssistantRoute,
         mergeAssistantMeta,
         mergeLastAssistantMeta,
+        mergeAssistantThinkingTrace,
         uiMode,
         setUiMode,
         // w.2.5.0: Session management
@@ -329,6 +330,10 @@ export const ChatContainer: React.FC = () => {
                         }
                     }, 500);
                 },
+                onThinkingTrace: (thinkingTrace) => {
+                    // event: thinking_trace can arrive before content, and can interleave.
+                    mergeAssistantThinkingTrace(thinkingTrace, { turn_id: undefined });
+                },
             },
             {
                 conversationId: ensuredConversationId,
@@ -400,7 +405,7 @@ export const ChatContainer: React.FC = () => {
                 <main className="flex-1 flex flex-col min-w-0">
                     {/* MessageList 容器：关键是设置明确的高度和 overflow */}
                     <div className="flex-1 min-h-0 h-full">
-                        <MessageList messages={messages} />
+                        <MessageList messages={messages} isStreaming={isStreaming} />
                     </div>
                     <InputBar onSend={handleSend} disabled={isStreaming} />
                 </main>

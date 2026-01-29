@@ -42,6 +42,9 @@ export type StreamCallbacks = {
   onLangGraphPath?: (evt: LangGraphPathEvent) => void;
   onObservability?: (meta: ObservabilitySnapshot) => void;
 
+  // Thinking Trace (PRD w.1.12.0): received via top-level SSE event `thinking_trace`
+  onThinkingTrace?: (thinkingTrace: import('@/types/thinkingTrace').ThinkingTrace) => void;
+
   /** Fired once when the first non-empty content token arrives (best-effort). */
   onFirstToken?: (tsMs: number) => void;
 
@@ -265,6 +268,7 @@ export async function streamChat(
     onExecuteStatus,
     onAgent,
     onObservability,
+    onThinkingTrace,
     onFirstToken,
     onError,
     onComplete
@@ -383,6 +387,15 @@ export async function streamChat(
         // Backend no longer emits langgraph_path from /chat/context; ignore even if present.
         const eventName = frame.event;
         if (eventName === 'langgraph_path' || obj.event === 'langgraph_path') {
+          continue;
+        }
+
+        // 2.2) thinking_trace frame (top-level SSE event)
+        if (eventName === 'thinking_trace') {
+          const raw = (obj as unknown as Record<string, unknown>)['thinking_trace'];
+          if (raw && typeof raw === 'object' && onThinkingTrace) {
+            onThinkingTrace(raw as import('@/types/thinkingTrace').ThinkingTrace);
+          }
           continue;
         }
 

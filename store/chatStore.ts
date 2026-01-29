@@ -1,6 +1,6 @@
 // store/chatStore.ts
 import { create } from 'zustand';
-import { ChatMessage, LangGraphPathEvent, ChatRouteEvent, ObservabilitySnapshot, MessageMeta } from '@/types/chat';
+import { ChatMessage, LangGraphPathEvent, ChatRouteEvent, ObservabilitySnapshot, MessageMeta, ThinkingTrace } from '@/types/chat';
 import { fetchConversationList, ConversationItem } from '@/lib/conversationApi';
 
 type UiMode = 'idle' | 'reasoning' | 'direct';
@@ -64,6 +64,9 @@ type ChatState = {
   openDebugDrawer: (tab?: 'context' | 'reasoning' | 'path') => void;
   closeDebugDrawer: () => void;
   setDebugDrawerTab: (tab: 'context' | 'reasoning' | 'path') => void;
+
+  // Thinking Trace (PRD w.1.12.0)
+  mergeAssistantThinkingTrace: (trace: ThinkingTrace, meta?: { turn_id?: string | null }) => void;
 };
 
 // ===== w.2.5.0: Session localStorage utilities =====
@@ -256,6 +259,41 @@ export const useChatStore = create<ChatState>((set, get) => ({
             ...current.observability,
             ...meta,
             turn_meta: Object.keys(mergedTurnMeta).length > 0 ? mergedTurnMeta : undefined,
+          },
+        };
+      }
+
+      return { messages };
+    }),
+
+  // Thinking Trace (PRD w.1.12.0)
+  mergeAssistantThinkingTrace: (trace, meta) =>
+    set((state) => {
+      const messages = [...state.messages];
+
+      const targetTurnId = meta?.turn_id ?? (typeof (trace as any)?.turn_id === 'string' ? (trace as any).turn_id : undefined);
+
+      let idx =
+        targetTurnId
+          ? [...messages]
+              .reverse()
+              .findIndex((m) => m.role === 'assistant' && m.turn_id === targetTurnId)
+          : -1;
+
+      if (idx >= 0) {
+        idx = messages.length - 1 - idx;
+      } else {
+        idx = [...messages].reverse().findIndex((m) => m.role === 'assistant');
+        idx = idx >= 0 ? messages.length - 1 - idx : -1;
+      }
+
+      if (idx >= 0 && messages[idx]?.role === 'assistant') {
+        const current = messages[idx];
+        messages[idx] = {
+          ...current,
+          thinking_trace: {
+            ...(current.thinking_trace ?? {}),
+            ...(trace ?? {}),
           },
         };
       }

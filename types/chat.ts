@@ -22,6 +22,7 @@ export type ContextTokensBreakdown = {
 };
 
 export type ContextDebugV172 = import('./contextDebug_v1_7_2').ContextDebugV172;
+export type ThinkingTrace = import('./thinkingTrace').ThinkingTrace;
 
 export type ObservabilitySnapshot = {
   turn_id?: string;
@@ -91,6 +92,9 @@ export type ChatMessage = {
 
   // Observability snapshot for context debugging
   observability?: ObservabilitySnapshot;
+
+  // Thinking Trace (PRD w.1.12.0)
+  thinking_trace?: ThinkingTrace;
 
   // Frontend-only per-message metadata (NOT persisted, NOT sent to backend)
   meta?: MessageMeta;

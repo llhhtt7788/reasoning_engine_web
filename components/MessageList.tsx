@@ -10,10 +10,12 @@ import 'katex/dist/katex.min.css';
 import { ChatMessage } from '@/types/chat';
 import { estimateTokens } from '@/lib/tokenEstimate';
 import { useToastStore } from '@/store/toastStore';
+import { ThinkingTracePanel } from '@/components/thinkingTrace/ThinkingTracePanel';
 
 type MessageListProps = {
     messages: ChatMessage[];
     showMetaPanels?: boolean;
+    isStreaming?: boolean;
 };
 
 // 性能优化：单独的消息组件，使用 React.memo 避免不必要的重渲染
@@ -21,7 +23,8 @@ const MessageItem = React.memo<{
     message: ChatMessage;
     index: number;
     nowMs: number;
-}>(({ message, index, nowMs }) => {
+    isActiveStreaming: boolean;
+}>(({ message, index, nowMs, isActiveStreaming }) => {
     const isUser = message.role === 'user';
     const bubbleAlign = isUser ? 'ml-auto' : 'mr-auto';
 
@@ -68,6 +71,13 @@ const MessageItem = React.memo<{
                     !isUser ? 'group' : '',
                 ].join(' ')}
             >
+                {!isUser ? (
+                  <ThinkingTracePanel
+                    trace={message.thinking_trace}
+                    isStreaming={isActiveStreaming}
+                  />
+                ) : null}
+
                 {!isUser && (message.content ?? '').trim().length > 0 ? (
                     <button
                         type="button"
@@ -240,15 +250,17 @@ const MessageItem = React.memo<{
         prevProps.message.reasoning === nextProps.message.reasoning && // Also good to verify reasoning for updates
         prevProps.message.route === nextProps.message.route &&
         prevProps.message.execute === nextProps.message.execute &&
+        prevProps.message.thinking_trace === nextProps.message.thinking_trace &&
         prevProps.message.role === nextProps.message.role &&
         prevProps.index === nextProps.index &&
-        prevProps.nowMs === nextProps.nowMs
+        prevProps.nowMs === nextProps.nowMs &&
+        prevProps.isActiveStreaming === nextProps.isActiveStreaming
     );
 });
 
 MessageItem.displayName = 'MessageItem';
 
-export const MessageList: React.FC<MessageListProps> = ({ messages, showMetaPanels = true }) => {
+export const MessageList: React.FC<MessageListProps> = ({ messages, showMetaPanels = true, isStreaming = false }) => {
     void showMetaPanels;
 
     const bottomRef = useRef<HTMLDivElement>(null);
@@ -380,6 +392,14 @@ export const MessageList: React.FC<MessageListProps> = ({ messages, showMetaPane
         return () => window.clearInterval(id);
     }, []);
 
+    const activeAssistantIndex = React.useMemo(() => {
+        if (!isStreaming) return -1;
+        for (let i = messages.length - 1; i >= 0; i--) {
+            if (messages[i]?.role === 'assistant') return i;
+        }
+        return -1;
+    }, [isStreaming, messages]);
+
     return (
         <div
             ref={containerRef}
@@ -398,6 +418,7 @@ export const MessageList: React.FC<MessageListProps> = ({ messages, showMetaPane
                     message={message}
                     index={index}
                     nowMs={nowMs}
+                    isActiveStreaming={!isStreaming ? false : (message.role === 'assistant' && index === activeAssistantIndex)}
                 />
             ))}
 

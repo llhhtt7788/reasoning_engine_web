@@ -45,3 +45,6 @@ next-env.d.ts
 # local request logs
 /logs/*
 !/logs/.gitkeep
+
+# IDE
+.idea/
