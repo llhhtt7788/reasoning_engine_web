@@ -2,6 +2,8 @@
 import React, { useMemo } from 'react';
 import { renderMessageToHtml } from '@/lib/latex';
 
+// (Light-mode only)
+
 type MessageBubbleProps = {
   role: 'user' | 'assistant';
   content: string;
@@ -27,7 +29,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ role, content }) =
         {isUser ? (
           <div className="whitespace-pre-wrap">{content}</div>
         ) : (
-          <div className="prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: renderedHtml }} />
+          <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: renderedHtml }} />
         )}
       </div>
     </div>

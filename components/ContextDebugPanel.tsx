@@ -366,11 +366,11 @@ export const ContextDebugPanel: React.FC<ContextDebugPanelProps> = ({
         <div className="text-xs text-gray-500">展示 v1.7.2 Intent / Policy / Execution 的控制流事实</div>
       </div>
 
-      {snapshot?.context_debug_missing ? (
+      {/* {snapshot?.context_debug_missing ? (
         <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
           后端未返回字段 context_debug
         </div>
-      ) : null}
+      ) : null} */}
 
       <div className="space-y-2">
         <SectionLabel title="标识" />
