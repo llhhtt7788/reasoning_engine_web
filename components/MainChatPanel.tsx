@@ -153,7 +153,7 @@ export const MainChatPanel: React.FC = () => {
         app_id: appId,
         conversation_id: ensuredConversationId,
         session_id: ensuredSessionId,
-      },
+      } as any,
     };
 
     const assistantMsg = {
@@ -165,13 +165,12 @@ export const MainChatPanel: React.FC = () => {
         conversation_id: ensuredConversationId,
         session_id: ensuredSessionId,
         app_id: appId,
-      },
-      thinking_trace: null,
+      } as any,
+      thinking_trace: undefined,
     };
 
     addMessage(userMsg);
-    addMessage(assistantMsg);
-    setLastAssistantRoute({ route: 'unknown', agent: null });
+    addMessage(assistantMsg as any);
 
     setUiMode('reasoning');
     requestStartTsRef.current = performance.now();
