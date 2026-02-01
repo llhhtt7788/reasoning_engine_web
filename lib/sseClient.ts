@@ -253,6 +253,7 @@ export type ChatRequestContext = {
   conversationId: string;
   conversationRootId?: string;
   sessionId: string;
+  model?: string;
 };
 
 export async function streamChat(
@@ -292,6 +293,8 @@ export async function streamChat(
       user_id: identity.user_id,
       app_id: identity.app_id,
     };
+
+    if (context.model) requestBody.model = context.model;
 
     // Add optional fields from cached environment configuration
     if (ENV_CONFIG.systemPrompt) requestBody.system = ENV_CONFIG.systemPrompt;

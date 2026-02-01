@@ -5,9 +5,7 @@ import { useChatStore } from '@/store/chatStore';
 import { ContextDebugPanel } from './ContextDebugPanel';
 import { DecisionPathPanel } from './DecisionPathPanel';
 
-type DebugDrawerProps = {
-  // No props needed - all state comes from store
-};
+type DebugDrawerProps = Record<string, never>;
 
 export const DebugDrawer: React.FC<DebugDrawerProps> = () => {
   const {

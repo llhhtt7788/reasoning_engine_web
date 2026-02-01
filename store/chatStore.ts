@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // store/chatStore.ts
 import { create } from 'zustand';
 import { ChatMessage, LangGraphPathEvent, ChatRouteEvent, ObservabilitySnapshot, MessageMeta, ThinkingTrace } from '@/types/chat';

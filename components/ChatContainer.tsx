@@ -17,6 +17,7 @@ import { INFERENCE_CONFIG, inferMode } from '@/lib/responseInference';
 import { useIdentityStore } from '@/store/identityStore';
 import { useToastStore } from '@/store/toastStore';
 import { mapChatError } from '@/lib/chatErrorMapping';
+import { useAgentStore } from '@/store/agentStore';
 
 const MODE_FADE_DELAY_MS = 1400;
 
@@ -35,7 +36,7 @@ function newConversationId(): string {
 }
 
 export const ChatContainer: React.FC = () => {
-    const {
+  const {
         messages,
         isStreaming,
         addMessage,
@@ -61,6 +62,10 @@ export const ChatContainer: React.FC = () => {
         deleteSession,
         updateCurrentSessionId, // w.2.5.2 fix
     } = useChatStore();
+
+  const { currentAgentId, getAgentInfo } = useAgentStore();
+  const currentAgent = getAgentInfo(currentAgentId);
+  const currentModel = currentAgent?.model;
 
     const pushToast = useToastStore((s) => s.pushToast);
 
@@ -339,6 +344,7 @@ export const ChatContainer: React.FC = () => {
                 conversationId: ensuredConversationId,
                 conversationRootId: conversationRootId,
                 sessionId: ensuredSessionId,
+                model: currentModel,
             }
         );
     };

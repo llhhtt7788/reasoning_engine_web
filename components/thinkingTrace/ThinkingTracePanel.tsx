@@ -16,7 +16,9 @@ function useThrottledValue<T>(value: T, waitMs = 100): T {
   const lastSetRef = useRef(0);
   const timerRef = useRef<number | null>(null);
   const latestRef = useRef(value);
-  latestRef.current = value;
+  useEffect(() => {
+    latestRef.current = value;
+  }, [value]);
 
   useEffect(() => {
     const now = Date.now();
@@ -106,14 +108,14 @@ function prettyBlockName(key: string): string {
 }
 
 const ThinkingTracePanelInner: React.FC<ThinkingTracePanelProps> = ({ trace, isStreaming }) => {
-  // If field missing/empty => hide entirely (PRD robustness)
-  const hasTrace = trace && typeof trace === 'object' && Object.keys(trace).length > 0;
-  if (!hasTrace) return null;
-
   const throttledTrace = useThrottledValue(trace, 100);
 
   const [open, setOpen] = useState(false);
   const [tooltip, setTooltip] = useState<TooltipState>({ open: false, x: 0, y: 0, text: '' });
+
+  // If field missing/empty => hide entirely (PRD robustness)
+  const hasTrace = trace && typeof trace === 'object' && Object.keys(trace).length > 0;
+  if (!hasTrace) return null;
 
   const showBreathing = Boolean(isStreaming && !open);
 
