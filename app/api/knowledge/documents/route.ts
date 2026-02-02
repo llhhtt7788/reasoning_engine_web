@@ -36,18 +36,32 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const upstreamRes = await fetch(upstreamUrl, {
-    method: 'GET',
-    headers: forwardHeaders,
-  });
+  try {
+    const upstreamRes = await fetch(upstreamUrl, {
+      method: 'GET',
+      headers: forwardHeaders,
+    });
 
-  const respHeaders = new Headers();
-  const respCt = upstreamRes.headers.get('content-type');
-  if (respCt) respHeaders.set('content-type', respCt);
+    const respHeaders = new Headers();
+    const respCt = upstreamRes.headers.get('content-type');
+    if (respCt) respHeaders.set('content-type', respCt);
 
-  return new Response(upstreamRes.body, {
-    status: upstreamRes.status,
-    headers: respHeaders,
-  });
+    return new Response(upstreamRes.body, {
+      status: upstreamRes.status,
+      headers: respHeaders,
+    });
+  } catch (err) {
+    // Most common in prod: base defaults to localhost and backend isn't reachable.
+    const message = err instanceof Error ? err.message : String(err);
+    return Response.json(
+      {
+        error: 'Upstream fetch failed',
+        upstreamUrl,
+        backendBase: backendBase ?? null,
+        hint: 'Check NEXT_PUBLIC_BACKEND_BASE_URL / NEXT_PUBLIC_BACKEND_URL on the server (must be reachable from Next.js runtime).',
+        message,
+      },
+      { status: 502 },
+    );
+  }
 }
-
