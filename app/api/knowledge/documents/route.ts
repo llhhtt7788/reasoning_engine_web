@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { getRequestLogOptionsFromEnv, writeRequestLog } from '@/lib/requestLogging';
 
 export const runtime = 'nodejs';
+// Ensure this route is always dynamic and not cached.
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   const LOG_OPTS = getRequestLogOptionsFromEnv();
@@ -40,11 +42,13 @@ export async function GET(req: NextRequest) {
     const upstreamRes = await fetch(upstreamUrl, {
       method: 'GET',
       headers: forwardHeaders,
+      cache: 'no-store',
     });
 
     const respHeaders = new Headers();
     const respCt = upstreamRes.headers.get('content-type');
     if (respCt) respHeaders.set('content-type', respCt);
+    respHeaders.set('cache-control', 'no-store');
 
     return new Response(upstreamRes.body, {
       status: upstreamRes.status,
@@ -61,7 +65,7 @@ export async function GET(req: NextRequest) {
         hint: 'Check NEXT_PUBLIC_BACKEND_BASE_URL / NEXT_PUBLIC_BACKEND_URL on the server (must be reachable from Next.js runtime).',
         message,
       },
-      { status: 502 },
+      { status: 502, headers: { 'cache-control': 'no-store' } },
     );
   }
 }
