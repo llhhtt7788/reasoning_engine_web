@@ -1,7 +1,6 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useChatStore } from '@/store/chatStore';
 import { MessageList } from './MessageList';
 import { InputBar } from './InputBar';
@@ -14,6 +13,8 @@ import { mapChatError } from '@/lib/chatErrorMapping';
 import { useAgentStore } from '@/store/agentStore';
 import { DebugDrawer } from '@/components/DebugDrawer';
 import { WrenchScrewdriverIcon } from '@heroicons/react/24/outline';
+import { uploadVlAsset } from '@/lib/vlAssets';
+import { joinBackendUrl } from '@/lib/backend';
 
 const MODE_FADE_DELAY_MS = 1400;
 
@@ -90,7 +91,7 @@ export const MainChatPanel: React.FC = () => {
   const firstTokenSeenRef = useRef<boolean>(false);
   const requestStartTsRef = useRef<number>(0);
   const firstTokenSlowTimerRef = useRef<number | null>(null);
-  const lastRequestRef = useRef<{ message: string; conversationId: string; sessionId: string } | null>(null);
+  const lastRequestRef = useRef<{ message: string; conversationId: string; sessionId: string; imageFile?: File | null; image_url?: string | null } | null>(null);
 
   useEffect(() => {
     const el = document.getElementById('workbench-root');
@@ -125,11 +126,35 @@ export const MainChatPanel: React.FC = () => {
     if (firstTokenSlowTimerRef.current) window.clearTimeout(firstTokenSlowTimerRef.current);
   };
 
+  // VL image state (lifted from InputBar)
+  const [imageFile, setImageFile] = useState<File | null>(null);
+
   const handleSend = async (message: string) => {
-    if (!message.trim()) return;
+    if (!message.trim() && !imageFile) return;
 
     const ensuredConversationId = conversationId || newConversationId();
     const ensuredSessionId = sessionId || newClientSessionId();
+
+    // Use lifted image state.
+    const currentImage = imageFile;
+
+    // Upload first if there's an image.
+    let image_url: string | null | undefined = undefined;
+    if (currentImage) {
+      try {
+        const resp = await uploadVlAsset(currentImage);
+        image_url = joinBackendUrl(resp.asset_url);
+        // Upload succeeded -> clear image from input immediately.
+        setImageFile(null);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        pushToast({ type: 'error', message: `图片上传失败：${msg}` });
+        // Upload failed: do not send chat; keep imageFile state unchanged for retry.
+        return;
+      }
+    }
+
+    // persist identity
     if (!conversationId) {
       setConversationId(ensuredConversationId);
       persistConversationId(ensuredConversationId);
@@ -142,35 +167,29 @@ export const MainChatPanel: React.FC = () => {
       message,
       conversationId: ensuredConversationId,
       sessionId: ensuredSessionId,
+      imageFile: currentImage ?? null,
+      image_url: image_url ?? null,
     };
 
     const userMsg = {
-      id: `user-${Date.now()}`,
       role: 'user' as const,
       content: message,
-      meta: {
-        user: userId,
-        app_id: appId,
-        conversation_id: ensuredConversationId,
-        session_id: ensuredSessionId,
-      } as any,
+      conversation_id: ensuredConversationId,
+      session_id: ensuredSessionId,
     };
 
     const assistantMsg = {
-      id: `assistant-${Date.now()}`,
       role: 'assistant' as const,
       content: '',
       reasoning: '',
-      meta: {
-        conversation_id: ensuredConversationId,
-        session_id: ensuredSessionId,
-        app_id: appId,
-      } as any,
+      conversation_id: ensuredConversationId,
+      session_id: ensuredSessionId,
+      meta: {},
       thinking_trace: undefined,
     };
 
-    addMessage(userMsg);
-    addMessage(assistantMsg as any);
+    addMessage(userMsg as Parameters<typeof addMessage>[0]);
+    addMessage(assistantMsg as Parameters<typeof addMessage>[0]);
 
     setUiMode('reasoning');
     requestStartTsRef.current = performance.now();
@@ -260,6 +279,8 @@ export const MainChatPanel: React.FC = () => {
               ? () => {
                   const last = lastRequestRef.current;
                   if (!last) return;
+                  // restore image for retry
+                  setImageFile((last.imageFile ?? null) as File | null);
                   void handleSend(last.message);
                 }
               : undefined,
@@ -286,6 +307,7 @@ export const MainChatPanel: React.FC = () => {
         conversationRootId: conversationRootId,
         sessionId: ensuredSessionId,
         model: currentModel,
+        image_url: image_url ?? null,
       }
     );
   };
@@ -330,7 +352,12 @@ export const MainChatPanel: React.FC = () => {
           <MessageList messages={messages} isStreaming={isStreaming} />
         </div>
         <div className="border-t border-gray-100">
-          <InputBar onSend={handleSend} disabled={isStreaming} />
+          <InputBar
+            onSendAction={handleSend}
+            disabled={isStreaming}
+            imageFile={imageFile}
+            setImageFileAction={setImageFile}
+          />
           <div className="text-center text-xs text-gray-400 mt-2 mb-1">当前 Agent: {currentAgent?.name}</div>
         </div>
       </div>

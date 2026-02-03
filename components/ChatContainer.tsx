@@ -1,5 +1,4 @@
 // components/ChatContainer.tsx
-/* eslint-disable react-hooks/set-state-in-effect */
 
 'use client';
 
@@ -18,6 +17,8 @@ import { useIdentityStore } from '@/store/identityStore';
 import { useToastStore } from '@/store/toastStore';
 import { mapChatError } from '@/lib/chatErrorMapping';
 import { useAgentStore } from '@/store/agentStore';
+import { uploadVlAsset } from '@/lib/vlAssets';
+import { joinBackendUrl } from '@/lib/backend';
 
 const MODE_FADE_DELAY_MS = 1400;
 
@@ -50,7 +51,6 @@ export const ChatContainer: React.FC = () => {
         uiMode,
         setUiMode,
         // w.2.5.0: Session management
-        loadSessions,
         loadSessionsFromBackend,
         createNewSession,
         currentSessionId,
@@ -81,6 +81,9 @@ export const ChatContainer: React.FC = () => {
     // w.2.5.0: Modal states
     const [isUploadsModalOpen, setIsUploadsModalOpen] = useState(false);
     const [sessionToDelete, setSessionToDelete] = useState<SessionMetadata | null>(null);
+
+    // VL image state (lifted from InputBar): keep image on upload/chat failure; clear after upload success.
+    const [imageFile, setImageFile] = useState<File | null>(null);
 
     // Hydrate persisted identity on client after mount (no SSR mismatch).
     useEffect(() => {
@@ -115,7 +118,7 @@ export const ChatContainer: React.FC = () => {
     const firstTokenSlowTimerRef = useRef<number | null>(null);
 
     // w2.6.0: cache last request for retry
-    const lastRequestRef = useRef<{ message: string; conversationId: string; sessionId: string } | null>(null);
+    const lastRequestRef = useRef<{ message: string; conversationId: string; sessionId: string; imageFile?: File | null; image_url?: string | null } | null>(null);
 
     useEffect(() => {
         const el = document.getElementById('workbench-root');
@@ -146,7 +149,6 @@ export const ChatContainer: React.FC = () => {
 
     useEffect(() => {
         return cleanupTimers;
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const scheduleFadeToIdle = () => {
@@ -186,11 +188,38 @@ export const ChatContainer: React.FC = () => {
         const ensuredConversationId = conversationId;
         const ensuredSessionId = sessionId || newClientSessionId();
 
+        // Use lifted image state.
+        const currentImage = imageFile;
+
+        // Do NOT mutate UI state (append message) until we ensure upload succeeded.
+        let image_url: string | null | undefined = undefined;
+
+        if (currentImage) {
+          try {
+            const resp = await uploadVlAsset(currentImage);
+            image_url = joinBackendUrl(resp.asset_url);
+
+            // Upload succeeded -> clear image from input immediately.
+            setImageFile(null);
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            pushToast({ type: 'error', message: `图片上传失败：${msg}` });
+            // Upload failed: do not send chat; keep imageFile state unchanged for retry.
+            return;
+          }
+        }
+
         // cache for retry
-        lastRequestRef.current = { message, conversationId: ensuredConversationId, sessionId: ensuredSessionId };
+        lastRequestRef.current = {
+          message,
+          conversationId: ensuredConversationId,
+          sessionId: ensuredSessionId,
+          imageFile: currentImage ?? null,
+          image_url: image_url ?? null,
+        };
 
         if (!sessionId) {
-            setSessionId(ensuredSessionId);
+          setSessionId(ensuredSessionId);
         }
 
         // Add user message
@@ -299,13 +328,13 @@ export const ChatContainer: React.FC = () => {
                             ? () => {
                                 const last = lastRequestRef.current;
                                 if (!last) return;
-                                // Re-send last message (new assistant bubble will be appended)
+                                // restore image for retry
+                                setImageFile((last.imageFile ?? null) as File | null);
                                 void handleSend(last.message);
                             }
                             : undefined,
                     });
 
-                    // Keep the assistant bubble empty, but add a small friendly hint for context.
                     updateLastAssistant('\n\n（请求失败，可点击右下角提示重试）');
                     setStreaming(false);
                     scheduleFadeToIdle();
@@ -345,6 +374,7 @@ export const ChatContainer: React.FC = () => {
                 conversationRootId: conversationRootId,
                 sessionId: ensuredSessionId,
                 model: currentModel,
+                image_url: image_url ?? null,
             }
         );
     };
@@ -413,7 +443,12 @@ export const ChatContainer: React.FC = () => {
                     <div className="flex-1 min-h-0 h-full">
                         <MessageList messages={messages} isStreaming={isStreaming} />
                     </div>
-                    <InputBar onSend={handleSend} disabled={isStreaming} />
+                    <InputBar
+                      onSendAction={handleSend}
+                      imageFile={imageFile}
+                      setImageFileAction={setImageFile}
+                      disabled={isStreaming}
+                    />
                 </main>
 
                 {/* Right: Debug Drawer (slides in/out) */}
