@@ -1,4 +1,10 @@
-import type { Patient, PatientDiagnosis, MDTSession, PatientStatistics } from '@/types/patient';
+import type {
+  Patient,
+  PatientDiagnosis,
+  MDTSession,
+  MDTReport,
+  PatientStatistics,
+} from '@/types/patient';
 
 // Mock患者数据
 export const mockPatients: Patient[] = [
@@ -199,6 +205,103 @@ export const mockMDTSessions: MDTSession[] = [
     startTime: '2023-05-13 14:00',
     participatingDepts: ['影像科', '病理科', '外科', '内科'],
     status: 'ongoing',
+  },
+];
+
+export const mockMDTReports: MDTReport[] = [
+  {
+    id: '1',
+    sessionId: '1',
+    patientId: '1',
+    code: 'MDT-20230513-008',
+    status: 'completed',
+    createdAt: '2023-05-13 16:45',
+    applicantDept: '肺外科',
+    host: '李明',
+    hostTitle: '主任医师',
+    recorder: '王芳',
+    recorderTitle: '主治医师',
+    participatingDepts: ['影像科', '病理科', '外科', '内科'],
+    consensusRate: 0.85,
+    mainDiagnosis: '右肺上叶腺癌(cT2aN1M0，IIB期)',
+    baseDiseases: ['高血压', '2型糖尿病'],
+    mainConclusion:
+      '建议行胸腔镜下右肺上叶切除+系统性纵隔淋巴结清扫术，术后根据恢复情况于3-4周开始辅助靶向治疗（奥希替尼80mg qd，治疗周期3年）。',
+    opinions: [
+      {
+        dept: '影像科意见',
+        content:
+          '右肺上叶占位，大小约3.5×2.8cm，边界不清，可见毛刺征；纵隔淋巴结增大，短径约1.2cm，未见远处转移征象。',
+      },
+      {
+        dept: '病理科意见',
+        content:
+          'CT引导下穿刺活检提示：腺癌，分化中等；EGFR exon 19缺失突变阳性。',
+      },
+      {
+        dept: '外科意见',
+        content:
+          '患者右肺上叶腺癌明确，肿瘤可切除，建议行胸腔镜下右肺上叶切除+系统性纵隔淋巴结清扫术。',
+      },
+      {
+        dept: '内科意见',
+        content:
+          '根据病理结果，建议术后行辅助靶向治疗，奥希替尼80mg qd，疗程3年。',
+      },
+      {
+        dept: '放疗科意见',
+        content:
+          '目前无明确放疗指征，如术后出现N2淋巴结转移，可考虑纵隔区域辅助放疗。',
+      },
+    ],
+    treatmentPlan: [
+      {
+        phase: '术前准备',
+        plan: '完善肺功能、心评估，控制血压、血糖',
+        time: '2023-05-14至2023-05-18',
+        dept: '胸外科、麻醉科',
+      },
+      {
+        phase: '手术治疗',
+        plan: '胸腔镜下右肺上叶切除+系统性纵隔淋巴结清扫术',
+        time: '2023-05-19',
+        dept: '胸外科',
+      },
+      {
+        phase: '术后恢复',
+        plan: '术后监护、疼痛管理、呼吸功能锻炼',
+        time: '2023-05-19至2023-05-26',
+        dept: '胸外科、康复科',
+      },
+      {
+        phase: '辅助治疗',
+        plan: '奥希替尼80mg qd，口服，治疗周期3年',
+        time: '2023-06-12开始',
+        dept: '肿瘤科',
+      },
+    ],
+    followUpPlan: [
+      {
+        time: '术后1个月',
+        content: '体格检查、血常规、生化、肺癌标志物、胸部CT',
+        dept: '胸外科',
+      },
+      {
+        time: '术后3个月',
+        content: '体格检查、血常规、生化、肺癌标志物、胸部CT、腹部超声',
+        dept: '肿瘤科',
+      },
+      {
+        time: '术后6个月',
+        content: '体格检查、血常规、生化、肺癌标志物、胸部CT、腹部超声、头颅MRI',
+        dept: '肿瘤科',
+      },
+      {
+        time: '术后1年',
+        content: '体格检查、血常规、生化、肺癌标志物、胸部CT、腹部超声、头颅MRI、骨扫描',
+        dept: '肿瘤科',
+      },
+    ],
   },
 ];
 

@@ -2,13 +2,15 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 export const MDTTopNav = () => {
+  const pathname = usePathname();
   const navItems = [
-    { name: '工作台', href: '/mdt', active: true },
-    { name: '患者中心', href: '/mdt/patients', active: false },
-    { name: '科室能力库', href: '/mdt/departments', active: false },
-    { name: '决策记录', href: '/mdt/records', active: false },
+    { name: '工作台', href: '/mdt' },
+    { name: '患者中心', href: '/mdt/patients' },
+    { name: '科室能力库', href: '/mdt/departments' },
+    { name: '决策记录', href: '/mdt/records' },
   ];
 
   return (
@@ -27,19 +29,24 @@ export const MDTTopNav = () => {
 
         {/* 导航菜单 */}
         <div className="flex items-center space-x-1">
-          {navItems.map((item) => (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                item.active
-                  ? 'text-blue-600 bg-blue-50'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              }`}
-            >
-              {item.name}
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            const isActive =
+              pathname === item.href ||
+              (item.href !== '/mdt' && pathname.startsWith(`${item.href}/`));
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'text-blue-600 bg-blue-50'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                {item.name}
+              </Link>
+            );
+          })}
         </div>
       </div>
 

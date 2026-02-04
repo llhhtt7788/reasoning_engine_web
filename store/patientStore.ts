@@ -3,6 +3,7 @@ import type {
   Patient,
   PatientDiagnosis,
   MDTSession,
+  MDTReport,
   PatientStatistics,
   PatientFilters,
   PatientPagination,
@@ -12,6 +13,7 @@ import {
   mockPatients,
   mockDiagnoses,
   mockMDTSessions,
+  mockMDTReports,
   mockPatientStatistics,
 } from '@/lib/patientMockData';
 
@@ -22,6 +24,7 @@ interface PatientStore {
   selectedPatient: Patient | null;
   diagnoses: PatientDiagnosis[];
   mdtSessions: MDTSession[];
+  mdtReports: MDTReport[];
   statistics: PatientStatistics;
 
   // 筛选和搜索
@@ -43,6 +46,8 @@ interface PatientStore {
   getPatientById: (id: string) => Patient | undefined;
   getDiagnosesByPatientId: (patientId: string) => PatientDiagnosis[];
   getMDTSessionByPatientId: (patientId: string) => MDTSession | undefined;
+  getMDTReportsByPatientId: (patientId: string) => MDTReport[];
+  getMDTReportById: (reportId: string) => MDTReport | undefined;
   fetchPatients: () => Promise<void>;
   setSelectedPatient: (patient: Patient | null) => void;
 }
@@ -54,6 +59,7 @@ export const usePatientStore = create<PatientStore>((set, get) => ({
   selectedPatient: null,
   diagnoses: mockDiagnoses,
   mdtSessions: mockMDTSessions,
+  mdtReports: mockMDTReports,
   statistics: mockPatientStatistics,
 
   searchKeyword: '',
@@ -152,6 +158,14 @@ export const usePatientStore = create<PatientStore>((set, get) => ({
 
   getMDTSessionByPatientId: (patientId) => {
     return get().mdtSessions.find((session) => session.patientId === patientId);
+  },
+
+  getMDTReportsByPatientId: (patientId) => {
+    return get().mdtReports.filter((report) => report.patientId === patientId);
+  },
+
+  getMDTReportById: (reportId) => {
+    return get().mdtReports.find((report) => report.id === reportId);
   },
 
   fetchPatients: async () => {

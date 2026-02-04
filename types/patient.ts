@@ -61,6 +61,46 @@ export interface MDTSession {
   status: 'ongoing' | 'completed' | 'scheduled';
 }
 
+export interface MDTReportOpinion {
+  dept: string;
+  content: string;
+}
+
+export interface MDTReportPlanItem {
+  phase: string;
+  plan: string;
+  time: string;
+  dept: string;
+}
+
+export interface MDTReportFollowUpItem {
+  time: string;
+  content: string;
+  dept: string;
+}
+
+export interface MDTReport {
+  id: string;
+  patientId: string;
+  sessionId: string;
+  code: string;
+  status: 'completed' | 'ongoing';
+  createdAt: string;
+  applicantDept: string;
+  host: string;
+  hostTitle: string;
+  recorder: string;
+  recorderTitle: string;
+  participatingDepts: string[];
+  consensusRate: number;
+  mainDiagnosis: string;
+  baseDiseases: string[];
+  mainConclusion: string;
+  opinions: MDTReportOpinion[];
+  treatmentPlan: MDTReportPlanItem[];
+  followUpPlan: MDTReportFollowUpItem[];
+}
+
 export interface PatientStatistics {
   total: number;
   totalChange: number; // 本月变化
