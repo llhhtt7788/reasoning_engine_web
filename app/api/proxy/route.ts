@@ -12,6 +12,33 @@ function isAllowedOrigin(origin: string | null): origin is string {
   return !!origin && ALLOWED_ORIGINS.includes(origin);
 }
 
+function stripModelFieldIfJson(bodyText: string, contentType: string | null): { forwardBodyText: string; bodyTextForLog: string } {
+  if (!contentType?.toLowerCase().includes('application/json')) {
+    return { forwardBodyText: bodyText, bodyTextForLog: bodyText };
+  }
+
+  try {
+    const parsed = JSON.parse(bodyText) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { forwardBodyText: bodyText, bodyTextForLog: bodyText };
+    }
+
+    const obj = parsed as Record<string, unknown>;
+    if (!Object.prototype.hasOwnProperty.call(obj, 'model')) {
+      return { forwardBodyText: bodyText, bodyTextForLog: bodyText };
+    }
+
+    // Create a shallow copy before deleting so we don't mutate a shared reference.
+    const next: Record<string, unknown> = { ...obj };
+    delete next.model;
+    const forwardBodyText = JSON.stringify(next);
+    return { forwardBodyText, bodyTextForLog: forwardBodyText };
+  } catch {
+    // If parsing fails, keep original body.
+    return { forwardBodyText: bodyText, bodyTextForLog: bodyText };
+  }
+}
+
 export async function OPTIONS(req: NextRequest) {
   const origin = req.headers.get('origin');
   const headers = new Headers();
@@ -49,11 +76,19 @@ export async function POST(req: NextRequest) {
 
   // Read full body for logging + forwarding.
   // Note: This buffers the request. For local debugging it's acceptable.
-  const bodyTextFull = await req.text();
+  const bodyTextRaw = await req.text();
+
+  // Strip `model` if present in JSON.
+  const { forwardBodyText: bodyTextFull, bodyTextForLog: sanitizedBodyTextForLog } = stripModelFieldIfJson(
+    bodyTextRaw,
+    req.headers.get('content-type')
+  );
 
   // Truncate extremely large payloads ONLY for logging (do not mutate what we forward).
   const bodyTextForLog =
-    bodyTextFull.length > LOG_OPTS.maxBytes ? bodyTextFull.slice(0, LOG_OPTS.maxBytes) : bodyTextFull;
+    sanitizedBodyTextForLog.length > LOG_OPTS.maxBytes
+      ? sanitizedBodyTextForLog.slice(0, LOG_OPTS.maxBytes)
+      : sanitizedBodyTextForLog;
 
   if (LOG_OPTS.enabled) {
     const headerObj: Record<string, string> = {};

@@ -306,7 +306,6 @@ export const MainChatPanel: React.FC = () => {
         conversationId: ensuredConversationId,
         conversationRootId: conversationRootId,
         sessionId: ensuredSessionId,
-        model: currentModel,
         image_url: image_url ?? null,
       }
     );

@@ -253,7 +253,6 @@ export type ChatRequestContext = {
   conversationId: string;
   conversationRootId?: string;
   sessionId: string;
-  model?: string;
 
   /** Optional image URL for VL routing (backend will auto-route if agent_name is not set). */
   image_url?: string | null;
@@ -297,7 +296,7 @@ export async function streamChat(
       app_id: identity.app_id,
     };
 
-    if (context.model) requestBody.model = context.model;
+    // Do not send `model` from frontend. Backend should decide routing/model.
     if (context.image_url) requestBody.image_url = context.image_url;
 
     // Add optional fields from cached environment configuration
