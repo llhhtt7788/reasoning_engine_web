@@ -77,7 +77,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({ patients }) => {
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                 <Link
-                  href={`/patients/${patient.id}`}
+                  href={`/mdt/patients/${patient.id}`}
                   className="text-blue-600 hover:text-blue-900 flex items-center space-x-1"
                 >
                   <span>查看</span>
