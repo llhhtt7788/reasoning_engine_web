@@ -6,19 +6,17 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useChatStore, SessionMetadata } from '@/store/chatStore';
 import { MessageList } from './MessageList';
 import { InputBar } from './InputBar';
-import { streamChat } from '@/lib/sseClient';
 import { SessionSidebar } from './SessionSidebar';
 import { DebugDrawer } from './DebugDrawer';
 import { KnowledgeUploadsModal } from './KnowledgeUploadsModal';
 import { DeleteSessionConfirmModal } from './DeleteSessionConfirmModal';
 import { persistConversationId } from '@/lib/sessionManager';
-import { INFERENCE_CONFIG, inferMode } from '@/lib/responseInference';
 import { useIdentityStore } from '@/store/identityStore';
 import { useToastStore } from '@/store/toastStore';
-import { mapChatError } from '@/lib/chatErrorMapping';
 import { useAgentStore } from '@/store/agentStore';
 import { uploadVlAsset } from '@/lib/vlAssets';
 import { joinBackendUrl } from '@/lib/backend';
+import { useV3ChatStore } from '@/store/v3ChatStore';
 
 const MODE_FADE_DELAY_MS = 1400;
 
@@ -40,14 +38,6 @@ export const ChatContainer: React.FC = () => {
   const {
         messages,
         isStreaming,
-        addMessage,
-        updateLastAssistant,
-        updateLastAssistantStatus, // Add this
-        setStreaming,
-        setLastAssistantRoute,
-        mergeAssistantMeta,
-        mergeLastAssistantMeta,
-        mergeAssistantThinkingTrace,
         uiMode,
         setUiMode,
         // w.2.5.0: Session management
@@ -56,11 +46,8 @@ export const ChatContainer: React.FC = () => {
         currentSessionId,
         // w.2.5.0: Debug drawer
         isDebugDrawerOpen,
-        drawerAutoOpened,
         openDebugDrawer,
-        closeDebugDrawer,
         deleteSession,
-        updateCurrentSessionId, // w.2.5.2 fix
     } = useChatStore();
 
   const { currentAgentId, getAgentInfo } = useAgentStore();
@@ -152,14 +139,15 @@ export const ChatContainer: React.FC = () => {
     }, []);
 
     const scheduleFadeToIdle = () => {
-        if (fadeTimerRef.current) {
-            window.clearTimeout(fadeTimerRef.current);
-            fadeTimerRef.current = null;
-        }
-        fadeTimerRef.current = window.setTimeout(() => {
-            setUiMode('idle');
-            fadeTimerRef.current = null;
-        }, MODE_FADE_DELAY_MS);
+      // keep: referenced by UI mode transitions elsewhere
+      if (fadeTimerRef.current) {
+        window.clearTimeout(fadeTimerRef.current);
+        fadeTimerRef.current = null;
+      }
+      fadeTimerRef.current = window.setTimeout(() => {
+        setUiMode('idle');
+        fadeTimerRef.current = null;
+      }, MODE_FADE_DELAY_MS);
     };
 
     const clearInferenceTimers = () => {
@@ -192,12 +180,12 @@ export const ChatContainer: React.FC = () => {
         const currentImage = imageFile;
 
         // Do NOT mutate UI state (append message) until we ensure upload succeeded.
-        let image_url: string | null | undefined = undefined;
+        let imageUrls: string[] = [];
 
         if (currentImage) {
           try {
             const resp = await uploadVlAsset(currentImage);
-            image_url = joinBackendUrl(resp.asset_url);
+            imageUrls = [joinBackendUrl(resp.asset_url)];
 
             // Upload succeeded -> clear image from input immediately.
             setImageFile(null);
@@ -215,167 +203,24 @@ export const ChatContainer: React.FC = () => {
           conversationId: ensuredConversationId,
           sessionId: ensuredSessionId,
           imageFile: currentImage ?? null,
-          image_url: image_url ?? null,
+          image_url: imageUrls[0] ?? null,
         };
 
         if (!sessionId) {
           setSessionId(ensuredSessionId);
         }
 
-        // Add user message
-        addMessage({ role: 'user', content: message, conversation_id: ensuredConversationId });
-
-        // Add empty assistant message
-        addMessage({
-            role: 'assistant',
-            content: '',
-            conversation_id: ensuredConversationId,
-            session_id: ensuredSessionId,
-            meta: {},
+        // 统一走 V3 /communicate（多模态通过 messages[].content 传入）
+        await useV3ChatStore.getState().sendMessage({
+          queryText: message,
+          stream: true,
+          imageUrls,
+          agent_mode: imageUrls.length > 0 ? 'vl_agent' : undefined,
+          user_id: userId,
+          app_id: appId,
         });
 
-        // If we see a noticeable blank wait before first token, infer "deep" and allow UI to show the hint.
-        blankWaitTimerRef.current = window.setTimeout(() => {
-            if (firstTokenSeenRef.current) return;
-            mergeLastAssistantMeta({ inferredMode: 'deep' });
-        }, INFERENCE_CONFIG.blankWaitHintMs);
-
-        // w2.6.0: If first token takes too long, show an info toast (soft warning).
-        firstTokenSlowTimerRef.current = window.setTimeout(() => {
-            if (firstTokenSeenRef.current) return;
-            pushToast({ type: 'info', message: '响应时间较长，请耐心等待…' });
-        }, 9000);
-
-        setStreaming(true);
-
-        await streamChat(
-            message,
-            {
-                onRoute: (route) => {
-                    setLastAssistantRoute(route);
-                    mergeAssistantMeta(route);
-
-                    // conversation_id is frontend-controlled in w.1.3.2; keep backend value for display only.
-                    if (route.conversation_id && route.conversation_id !== ensuredConversationId) {
-                        mergeAssistantMeta({ conversation_id: route.conversation_id });
-
-                        // w.2.5.2 FIX: Update local session ID if backend determines a different one (e.g. backend-generated UUID)
-                        // This prevents creating a "new" session for the 2nd message because we were holding an obsolete frontend ID.
-                        console.log('[ChatContainer] Backend returned new conversation_id:', route.conversation_id);
-                        setConversationId(route.conversation_id);
-                        persistConversationId(route.conversation_id);
-                        if (sessionId) {
-                             // Assuming 1:1 mapping for simplicity if your logic requires it
-                             setSessionId(route.conversation_id);
-                        }
-                        updateCurrentSessionId(route.conversation_id);
-                    }
-                },
-                onRouteStatus: (route) => {
-                    updateLastAssistantStatus({ route });
-                },
-                onExecuteStatus: (execute) => {
-                    updateLastAssistantStatus({ execute });
-                },
-                onFirstToken: (tsMs) => {
-                    if (firstTokenSeenRef.current) return;
-                    firstTokenSeenRef.current = true;
-                    clearInferenceTimers();
-
-                    const firstTokenLatencyMs = Math.max(0, tsMs - requestStartTsRef.current);
-                    const inferredMode = inferMode({
-                        requestStartTs: requestStartTsRef.current,
-                        firstTokenTs: tsMs,
-                        firstTokenLatencyMs,
-                        blankWaitFired: false,
-                    });
-
-                    mergeLastAssistantMeta({
-                        firstTokenLatencyMs,
-                        inferredMode,
-                        preHintUntilTs: inferredMode === 'deep'
-                            ? Date.now() + INFERENCE_CONFIG.minHintDisplayMs
-                            : undefined,
-                    });
-                },
-                onContent: (content) => {
-                    updateLastAssistant(content);
-                },
-                onReasoning: (reasoning) => {
-                    updateLastAssistant('', reasoning);
-                },
-                onAgent: (agentEvt) => {
-                    if (agentEvt.agent) {
-                        // Keep for internal observability panels only.
-                        mergeAssistantMeta({
-                            agent: agentEvt.agent,
-                            llm_index: agentEvt.llm_index,
-                        });
-                    }
-                },
-                onObservability: (meta) => {
-                    mergeAssistantMeta(meta);
-                },
-                onError: (error) => {
-                    clearInferenceTimers();
-
-                    const mapped = mapChatError(error);
-                    pushToast({
-                        type: 'error',
-                        message: `${mapped.title}: ${mapped.message}`,
-                        actionLabel: lastRequestRef.current ? '重试' : undefined,
-                        onAction: lastRequestRef.current
-                            ? () => {
-                                const last = lastRequestRef.current;
-                                if (!last) return;
-                                // restore image for retry
-                                setImageFile((last.imageFile ?? null) as File | null);
-                                void handleSend(last.message);
-                            }
-                            : undefined,
-                    });
-
-                    updateLastAssistant('\n\n（请求失败，可点击右下角提示重试）');
-                    setStreaming(false);
-                    scheduleFadeToIdle();
-                },
-                onComplete: () => {
-                    clearInferenceTimers();
-
-                    // If we never saw a first token, still mark deep (best-effort) so styling stays consistent.
-                    if (!firstTokenSeenRef.current) {
-                        mergeLastAssistantMeta({ inferredMode: 'deep' });
-                    }
-
-                    setStreaming(false);
-                    scheduleFadeToIdle();
-
-                    // w.2.5.0: Auto-close drawer if no reasoning content AND drawer was auto-opened
-                    // Check the last assistant message for reasoning after a short delay
-                    setTimeout(() => {
-                        const lastMsg = messages[messages.length - 1];
-                        const hasReasoning = lastMsg?.role === 'assistant' &&
-                                            lastMsg.reasoning &&
-                                            lastMsg.reasoning.trim().length > 0;
-
-                        // Only auto-close if drawer was auto-opened by reasoning detection
-                        if (!hasReasoning && isDebugDrawerOpen && drawerAutoOpened) {
-                            closeDebugDrawer();
-                        }
-                    }, 500);
-                },
-                onThinkingTrace: (thinkingTrace) => {
-                    // event: thinking_trace can arrive before content, and can interleave.
-                    mergeAssistantThinkingTrace(thinkingTrace, { turn_id: undefined });
-                },
-            },
-            {
-                conversationId: ensuredConversationId,
-                conversationRootId: conversationRootId,
-                sessionId: ensuredSessionId,
-                image_url: image_url ?? null,
-            }
-        );
+        // V3 Chat store 已负责插入 user/loading/assistant 以及流式更新，这里不再调用旧的 V1 streamChat。
     };
 
     // w.2.5.0: New session handler

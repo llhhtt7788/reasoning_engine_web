@@ -139,7 +139,7 @@ export const V3MessageBubble: React.FC<V3MessageBubbleProps> = ({
         </div>
 
         {/* 证据面板 */}
-        {message.evidence && message.evidence.length > 0 && (
+        {message.intent_type !== 'chitchat' && message.evidence && message.evidence.length > 0 && (
           <EvidencePanel evidence={message.evidence} />
         )}
 

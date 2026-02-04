@@ -74,11 +74,19 @@ export interface V3ChatMessage {
   error?: V3ErrorInfo;
 }
 
+// ===== 消息内容类型 =====
+
+export type V3MessageContentPart =
+  | { type: 'text'; text?: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
+export type V3MessageContent = string | V3MessageContentPart[];
+
 // ===== 上行消息格式（OpenAI 兼容） =====
 
 export interface V3UpstreamMessage {
   role: 'user' | 'assistant';
-  content: string;
+  content: V3MessageContent;
 }
 
 // ===== API 请求体 =====
@@ -91,6 +99,8 @@ export interface V3CommunicateRequest {
   user_id?: string;
   app_id?: string;
   stream?: boolean;
+  /** Agent 路由覆写（例如："vl_agent"）。当 messages 含图片时建议显式指定。 */
+  agent_mode?: string;
 }
 
 // ===== API 响应体 =====

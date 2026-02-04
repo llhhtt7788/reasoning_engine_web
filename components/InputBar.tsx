@@ -69,6 +69,12 @@ export const InputBar: React.FC<InputBarProps> = ({
         }}
       />
 
+      {imageFile && (
+        <div className="mb-2 text-[11px] text-gray-600">
+          VL 推理模式已就绪（将通过 V3 /communicate 路由至 vl_agent）
+        </div>
+      )}
+
       {imageFile && previewUrl ? (
         <div className="mb-2 flex items-start gap-3 rounded-xl border border-gray-200 bg-white/80 p-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}

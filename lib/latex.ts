@@ -4,6 +4,7 @@
 
 import katex from 'katex';
 import createDOMPurify from 'isomorphic-dompurify';
+import { marked } from 'marked';
 
 const windowLike: Window | typeof globalThis = typeof window !== 'undefined' ? window : globalThis;
 const DOMPurify = createDOMPurify(windowLike);
@@ -68,6 +69,9 @@ export function renderMessageToHtml(input: string): string {
   // restore escaped dollar signs
   const restored = combined.replace(new RegExp(ESC_DOLLAR, 'g'), '$');
 
+  // Markdown -> HTML (KaTeX HTML tokens already included in the string)
+  const markdownHtml = marked.parse(restored, { breaks: true }) as string;
+
   // Sanitize final HTML to avoid XSS
-  return DOMPurify.sanitize(restored);
+  return DOMPurify.sanitize(markdownHtml);
 }

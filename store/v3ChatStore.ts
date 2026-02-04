@@ -16,6 +16,9 @@ import {
   QualityDecision,
   generateMessageId,
 } from '@/types/v3Chat';
+import { v3Communicate, truncateMessages } from '@/lib/v3Api';
+import { v3StreamChat } from '@/lib/v3SseClient';
+import type { V3MessageContentPart, V3MessageContent } from '@/types/v3Chat';
 
 interface V3ChatState {
   // 展示用消息列表
@@ -56,7 +59,7 @@ interface V3ChatState {
     risk_level?: RiskLevel;
   }) => void;
 
-  // 添加成功的 assistant 消息（非流式）
+  // 添加成功的 assistant 消消息（非流式）
   addAssistantMessage: (content: string, data?: {
     evidence?: EvidenceRef[];
     trace_id?: string;
@@ -95,6 +98,20 @@ interface V3ChatState {
 
   // 获取用于上行的 messages（截断）
   getUpstreamMessages: (maxCount?: number) => V3UpstreamMessage[];
+
+  /**
+   * 统一发送入口（支持非流式 + 流式），可选附带图片资产 URL。
+   * - 当检测到图片时，会自动把最后一个 user message 变成多模态 list，并显式 agent_mode='vl_agent'
+   */
+  sendMessage: (params: {
+    queryText: string;
+    stream?: boolean;
+    imageUrls?: string[];
+    agent_mode?: string;
+    // identity
+    app_id?: string;
+    user_id?: string;
+  }) => Promise<void>;
 }
 
 function generateId(): string {
@@ -165,7 +182,15 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
   finalizeMessage: (data) => {
     set((state) => {
       const { streamingMessageId, messages } = state;
-      if (!streamingMessageId) return state;
+      if (!streamingMessageId) {
+        // 兜底：如果已经没有 streamingMessageId，但外部仍调用 finalize（例如 EOF 收尾），确保状态回落
+        return {
+          ...state,
+          isStreaming: false,
+          streamingMessageId: null,
+          abortController: null,
+        };
+      }
 
       const finalizedMessages = messages.map((msg) =>
         msg.id === streamingMessageId
@@ -180,7 +205,6 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
           : msg
       );
 
-      // 找到完成的消息，加入上行列表
       const finalizedMsg = finalizedMessages.find((m) => m.id === streamingMessageId);
       const newUpstream = finalizedMsg
         ? [...state.upstreamMessages, { role: 'assistant' as const, content: finalizedMsg.content }]
@@ -344,5 +368,85 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
       return upstreamMessages;
     }
     return upstreamMessages.slice(-maxCount);
+  },
+
+  sendMessage: async ({ queryText, stream = true, imageUrls = [], agent_mode, app_id, user_id }) => {
+    const trimmed = queryText.trim();
+    const hasImages = imageUrls.length > 0;
+
+    // 允许“只发图不发字”
+    const displayText = trimmed.length > 0 ? trimmed : (hasImages ? '[图片]' : '');
+    if (!displayText) return;
+
+    // 1) 写入 user message（展示层仍用纯文本）
+    get().addUserMessage(displayText);
+
+    // 2) 构造上行最后一条 user message：文本 or 多模态 list
+    const lastMessageContent: V3MessageContent = hasImages
+      ? ( [
+          { type: 'text', text: trimmed.length > 0 ? trimmed : '看下图片' },
+          ...imageUrls.map((url): V3MessageContentPart => ({
+            type: 'image_url',
+            image_url: { url },
+          })),
+        ] satisfies V3MessageContentPart[])
+      : trimmed;
+
+    const history = truncateMessages(get().getUpstreamMessages(20), 20);
+    const payload = {
+      query: trimmed.length > 0 ? trimmed : '看下图片',
+      messages: [...history, { role: 'user' as const, content: lastMessageContent }],
+      conversation_id: get().conversationId,
+      session_id: get().sessionId,
+      user_id,
+      app_id,
+      agent_mode: agent_mode ?? (hasImages ? 'vl_agent' : undefined),
+    };
+
+    if (!stream) {
+      const resp = await v3Communicate(payload);
+      if (resp.status === 'success') {
+        get().addAssistantMessage(resp.data?.response_content || '', {
+          evidence: resp.data?.response_evidence,
+          trace_id: resp.data?.trace_id,
+          quality_decision: resp.data?.quality_decision,
+          risk_level: resp.data?.risk_level,
+          intent_type: resp.data?.intent_type,
+        });
+      } else if (resp.status === 'clarify' && resp.data?.clarify_question) {
+        get().addClarifyCard(resp.data.clarify_question, resp.data.trace_id);
+      } else if (resp.status === 'pending_review') {
+        get().addPendingReviewCard(resp.data?.trace_id);
+      } else {
+        get().addErrorCard(resp.error ?? { message: '请求失败', recoverable: true }, resp.data?.trace_id);
+      }
+      return;
+    }
+
+    // 3) 流式：加入 loading assistant，开始收 token
+    const messageId = get().addLoadingMessage();
+
+    const controller = v3StreamChat(payload, {
+      onToken: (ev) => {
+        if (ev.content) get().appendTokenContent(ev.content);
+      },
+      onDone: (ev) => {
+        get().finalizeMessage({
+          evidence: ev.response_evidence,
+          trace_id: ev.trace_id,
+          quality_decision: ev.quality_decision,
+          risk_level: ev.risk_level,
+        });
+      },
+      onError: (ev) => {
+        get().markMessageAsError(messageId, {
+          code: ev.code,
+          message: ev.message,
+          recoverable: ev.recoverable,
+        });
+      },
+    });
+
+    get().setStreaming(true, controller);
   },
 }));
