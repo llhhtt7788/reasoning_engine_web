@@ -13,6 +13,7 @@ import { useToastStore } from '@/store/toastStore';
 import { InputBar } from '@/components/InputBar';
 import { uploadVlAsset } from '@/lib/vlAssets';
 import { joinBackendUrl } from '@/lib/backend';
+import { useIdentityStore } from '@/store/identityStore';
 
 interface V3ChatContainerProps {
   userId?: string;
@@ -22,11 +23,17 @@ interface V3ChatContainerProps {
 }
 
 export const V3ChatContainer: React.FC<V3ChatContainerProps> = ({
-  userId = 'anonymous',
-  appId = 'v3-demo',
+  userId,
+  appId,
   enableStream = true,
   debugMode = false,
 }) => {
+  const identityUserId = useIdentityStore((s) => s.userId);
+  const identityAppId = useIdentityStore((s) => s.appId);
+
+  const effectiveUserId = (userId ?? '').trim() || identityUserId;
+  const effectiveAppId = (appId ?? '').trim() || identityAppId;
+
   const [imageFile, setImageFile] = useState<File | null>(null);
 
   const {
@@ -77,15 +84,15 @@ export const V3ChatContainer: React.FC<V3ChatContainerProps> = ({
       stream: enableStream,
       imageUrls,
       agent_mode: imageUrls.length > 0 ? 'vl_agent' : undefined,
-      user_id: userId,
-      app_id: appId,
+      user_id: effectiveUserId,
+      app_id: effectiveAppId,
     });
   }, [
     isStreaming,
     imageFile,
     enableStream,
-    userId,
-    appId,
+    effectiveUserId,
+    effectiveAppId,
     pushToast,
     sendMessage,
   ]);
