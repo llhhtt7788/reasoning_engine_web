@@ -16,9 +16,10 @@ import {
   QualityDecision,
   generateMessageId,
 } from '@/types/v3Chat';
-import { v3Communicate, truncateMessages } from '@/lib/v3Api';
+import { v3Communicate } from '@/lib/v3Api';
 import { v3StreamChat } from '@/lib/v3SseClient';
-import type { V3MessageContentPart, V3MessageContent } from '@/types/v3Chat';
+import { resolveIdentityDefaults } from '@/lib/identityDefaults';
+import { useIdentityStore } from '@/store/identityStore';
 
 interface V3ChatState {
   // 展示用消息列表
@@ -381,30 +382,29 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
     // 1) 写入 user message（展示层仍用纯文本）
     get().addUserMessage(displayText);
 
-    // 2) 构造上行最后一条 user message：文本 or 多模态 list
-    const lastMessageContent: V3MessageContent = hasImages
-      ? ( [
-          { type: 'text', text: trimmed.length > 0 ? trimmed : '看下图片' },
-          ...imageUrls.map((url): V3MessageContentPart => ({
-            type: 'image_url',
-            image_url: { url },
-          })),
-        ] satisfies V3MessageContentPart[])
-      : trimmed;
+    const identity = resolveIdentityDefaults({
+      userId: user_id ?? useIdentityStore.getState().userId,
+      appId: app_id ?? useIdentityStore.getState().appId,
+    });
 
-    const history = truncateMessages(get().getUpstreamMessages(20), 20);
-    const payload = {
-      query: trimmed.length > 0 ? trimmed : '看下图片',
-      messages: [...history, { role: 'user' as const, content: lastMessageContent }],
+    const conversation_root_id = useIdentityStore.getState().conversationRootId || identity.user_id;
+
+    // v1-compatible payload (preferred)
+    const v1Payload = {
+      user: trimmed.length > 0 ? trimmed : '看下图片',
+      stream,
       conversation_id: get().conversationId,
+      conversation_root_id,
       session_id: get().sessionId,
-      user_id,
-      app_id,
+      user_id: identity.user_id,
+      app_id: identity.app_id,
+      image_url: hasImages ? imageUrls[0] : undefined,
+      // keep: allow explicit agent override, but default to vl_agent when we have images
       agent_mode: agent_mode ?? (hasImages ? 'vl_agent' : undefined),
     };
 
     if (!stream) {
-      const resp = await v3Communicate(payload);
+      const resp = await v3Communicate(v1Payload);
       if (resp.status === 'success') {
         get().addAssistantMessage(resp.data?.response_content || '', {
           evidence: resp.data?.response_evidence,
@@ -426,7 +426,7 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
     // 3) 流式：加入 loading assistant，开始收 token
     const messageId = get().addLoadingMessage();
 
-    const controller = v3StreamChat(payload, {
+    const controller = v3StreamChat(v1Payload, {
       onToken: (ev) => {
         if (ev.content) get().appendTokenContent(ev.content);
       },

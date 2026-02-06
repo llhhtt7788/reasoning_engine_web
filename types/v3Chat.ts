@@ -92,14 +92,26 @@ export interface V3UpstreamMessage {
 // ===== API 请求体 =====
 
 export interface V3CommunicateRequest {
-  query: string;
+  // v3 legacy fields (kept for backward compatibility)
+  query?: string;
   messages?: V3UpstreamMessage[];
+
+  // v1-compatible fields (preferred in this repo)
+  /** v1 uses `user` as the top-level prompt text */
+  user?: string;
+  /** PRD default: conversation_root_id = user_id */
+  conversation_root_id?: string;
+  /** v1 VL: a single uploaded asset url */
+  image_url?: string;
+
+  // common identity/session fields
   conversation_id?: string;
   session_id?: string;
   user_id?: string;
   app_id?: string;
   stream?: boolean;
-  /** Agent 路由覆写（例如："vl_agent"）。当 messages 含图片时建议显式指定。 */
+
+  /** Agent 路由覆写（例如："vl_agent"） */
   agent_mode?: string;
 }
 
