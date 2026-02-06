@@ -7,6 +7,8 @@
 import {
   V3CommunicateRequest,
   V3TokenEvent,
+  V3StatusEvent,
+  V3EvidenceEvent,
   V3DoneEvent,
   V3ErrorEvent,
 } from '@/types/v3Chat';
@@ -14,6 +16,8 @@ import {
 const V3_API_URL = process.env.NEXT_PUBLIC_V3_API_URL || '/api/v3/communicate';
 
 export interface V3StreamCallbacks {
+  onStatus?: (event: V3StatusEvent) => void;
+  onEvidence?: (event: V3EvidenceEvent) => void;
   onToken: (event: V3TokenEvent) => void;
   onDone: (event: V3DoneEvent) => void;
   onError: (event: V3ErrorEvent) => void;
@@ -111,9 +115,12 @@ export function v3StreamChat(
         const eventType = frame.event || 'token';
 
         // token 可以容忍非 JSON（直接当作文本 token）
-        let payload: any = null;
+        let payload: Record<string, unknown> = {};
         try {
-          payload = JSON.parse(frame.data);
+          const parsed: unknown = JSON.parse(frame.data);
+          if (typeof parsed === 'object' && parsed !== null) {
+            payload = parsed as Record<string, unknown>;
+          }
         } catch {
           if (eventType === 'token' || eventType === 'message') {
             callbacks.onToken({ content: frame.data });
@@ -122,30 +129,58 @@ export function v3StreamChat(
         }
 
         switch (eventType) {
+          case 'status':
+            callbacks.onStatus?.({
+              stage: typeof payload.stage === 'string' ? payload.stage : undefined,
+            });
+            break;
+
+          case 'evidence':
+            callbacks.onEvidence?.({
+              chunks: Array.isArray(payload.chunks) ? payload.chunks : [],
+            });
+            break;
+
           case 'token':
             callbacks.onToken({
-              content: payload.content || '',
-              index: payload.index,
+              content: typeof payload.content === 'string' ? payload.content : '',
+              index: typeof payload.index === 'number' ? payload.index : undefined,
             });
             break;
 
           case 'done': {
             doneCalled = true;
-            const response_evidence = payload.response_evidence ?? payload.evidence ?? payload.citations;
+            const responseEvidence =
+              (Array.isArray(payload.response_evidence) ? payload.response_evidence : undefined) ??
+              (Array.isArray(payload.evidence) ? payload.evidence : undefined) ??
+              (Array.isArray(payload.citations) ? payload.citations : undefined);
             callbacks.onDone({
-              response_evidence,
-              trace_id: payload.trace_id,
-              quality_decision: payload.quality_decision,
-              risk_level: payload.risk_level,
+              response_evidence: responseEvidence,
+              citations: Array.isArray(payload.citations) ? payload.citations : undefined,
+              trace_id: typeof payload.trace_id === 'string' ? payload.trace_id : undefined,
+              quality_decision: typeof payload.quality_decision === 'string'
+                ? payload.quality_decision as V3DoneEvent['quality_decision']
+                : undefined,
+              risk_level: typeof payload.risk_level === 'string'
+                ? payload.risk_level as V3DoneEvent['risk_level']
+                : undefined,
+              route_decision: typeof payload.route_decision === 'string' ? payload.route_decision : undefined,
+              intent_type: typeof payload.intent_type === 'string' ? payload.intent_type : undefined,
+              quality_check: (typeof payload.quality_check === 'object' && payload.quality_check !== null)
+                ? payload.quality_check as Record<string, unknown>
+                : undefined,
+              meta: (typeof payload.meta === 'object' && payload.meta !== null)
+                ? payload.meta as Record<string, unknown>
+                : undefined,
             });
             break;
           }
 
           case 'error':
             callbacks.onError({
-              code: payload.code,
-              message: payload.message || '流式传输错误',
-              recoverable: payload.recoverable ?? true,
+              code: typeof payload.code === 'string' ? payload.code : undefined,
+              message: typeof payload.message === 'string' ? payload.message : '流式传输错误',
+              recoverable: typeof payload.recoverable === 'boolean' ? payload.recoverable : true,
             });
             break;
 

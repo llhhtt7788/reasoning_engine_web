@@ -158,3 +158,139 @@ body {
     animation: none;
   }
 }
+
+/* V3 rich text readability theme */
+.v3-rich-text {
+  font-family: "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  color: #0f172a;
+  line-height: 1.9;
+  letter-spacing: 0.01em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.v3-rich-text > *:first-child {
+  margin-top: 0;
+}
+
+.v3-rich-text > *:last-child {
+  margin-bottom: 0;
+}
+
+.v3-rich-text p {
+  margin: 0.55rem 0;
+}
+
+.v3-rich-text h1,
+.v3-rich-text h2,
+.v3-rich-text h3,
+.v3-rich-text h4 {
+  font-weight: 700;
+  line-height: 1.45;
+  margin-top: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+
+.v3-rich-text h1 {
+  font-size: 1.35rem;
+}
+
+.v3-rich-text h2 {
+  font-size: 1.2rem;
+}
+
+.v3-rich-text h3 {
+  font-size: 1.08rem;
+}
+
+.v3-rich-text h4 {
+  font-size: 1rem;
+}
+
+.v3-rich-text ul,
+.v3-rich-text ol {
+  margin: 0.65rem 0 0.9rem;
+  padding-left: 1.35rem;
+}
+
+.v3-rich-text li {
+  margin: 0.28rem 0;
+}
+
+.v3-rich-text li > p {
+  margin: 0.28rem 0;
+}
+
+.v3-rich-text strong {
+  font-weight: 700;
+  color: #0b1220;
+}
+
+.v3-rich-text em {
+  font-style: italic;
+}
+
+.v3-rich-text blockquote {
+  margin: 0.8rem 0;
+  padding: 0.45rem 0.9rem;
+  border-left: 3px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+}
+
+.v3-rich-text a {
+  color: #1d4ed8;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.v3-rich-text hr {
+  border: 0;
+  border-top: 1px solid #e2e8f0;
+  margin: 1rem 0;
+}
+
+.v3-rich-text pre {
+  margin: 0.9rem 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #e2e8f0;
+  overflow-x: auto;
+  line-height: 1.65;
+  font-size: 0.88em;
+}
+
+.v3-rich-text code {
+  font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.v3-rich-text :not(pre) > code {
+  background: #f1f5f9;
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.08rem 0.34rem;
+  font-size: 0.88em;
+}
+
+.v3-rich-text table {
+  width: 100%;
+  margin: 0.9rem 0;
+  border-collapse: collapse;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.v3-rich-text th,
+.v3-rich-text td {
+  border: 1px solid #e2e8f0;
+  padding: 0.46rem 0.62rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.v3-rich-text th {
+  background: #f8fafc;
+  font-weight: 600;
+}

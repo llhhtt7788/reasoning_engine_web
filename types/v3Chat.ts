@@ -20,6 +20,7 @@ export type RiskLevel = 'R0' | 'R1' | 'R2';
 export type QualityDecision = 'pass' | 'repair' | 'human_review' | 'block';
 
 export type V3ResponseStatus = 'success' | 'clarify' | 'pending_review' | 'error';
+export type V3StreamStage = 'searching' | 'generating' | 'validating';
 
 // ===== 证据引用 =====
 
@@ -31,6 +32,16 @@ export interface EvidenceRef {
   source?: string;
   // 允许额外字段（后端 dict[str, Any]）
   [key: string]: unknown;
+}
+
+export interface V3EvidenceChunk {
+  id?: string;
+  chunk_id?: string;
+  document_id?: string;
+  title?: string;
+  preview?: string;
+  score?: number | null;
+  url?: string;
 }
 
 // ===== 澄清问题 =====
@@ -121,8 +132,12 @@ export interface V3CommunicateData {
   response_content?: string;
   response_evidence?: EvidenceRef[];
   intent_type?: string;
+  complexity?: string;
   risk_level?: RiskLevel;
+  route_decision?: string;
+  planner_mode?: string;
   quality_decision?: QualityDecision;
+  quality_check?: Record<string, unknown>;
   trace_id?: string;
   clarify_question?: ClarifyQuestion | null;
 }
@@ -140,17 +155,77 @@ export interface V3TokenEvent {
   index?: number;
 }
 
+export interface V3StatusEvent {
+  stage?: V3StreamStage | string;
+}
+
+export interface V3EvidenceEvent {
+  chunks?: V3EvidenceChunk[];
+}
+
 export interface V3DoneEvent {
   response_evidence?: EvidenceRef[];
+  citations?: EvidenceRef[];
   trace_id?: string;
   quality_decision?: QualityDecision;
   risk_level?: RiskLevel;
+  route_decision?: string;
+  intent_type?: string;
+  quality_check?: Record<string, unknown>;
+  meta?: Record<string, unknown>;
 }
 
 export interface V3ErrorEvent {
   code?: string;
   message: string;
   recoverable?: boolean;
+}
+
+export interface V3TraceData {
+  trace_id: string;
+  created_at?: string;
+  status?: string;
+  source?: string;
+  stream?: boolean;
+
+  conversation_id?: string;
+  session_id?: string;
+  user_id?: string;
+  app_id?: string;
+  query?: string;
+
+  intent_type?: string;
+  complexity?: string;
+  risk_level?: string;
+  route_decision?: string;
+  planner_mode?: string;
+  agent_name?: string;
+
+  quality_decision?: string;
+  quality_check?: Record<string, unknown> | null;
+  retrieval_status?: string;
+  knowledge_status?: string;
+  retrieval_reason?: string;
+
+  plan_output?: Record<string, unknown> | null;
+  plan_steps?: Array<Record<string, unknown>> | null;
+  plan_subtasks?: string[] | null;
+  authorized_tools?: string[] | null;
+
+  clarify_question?: Record<string, unknown> | null;
+  tool_results?: Array<Record<string, unknown>> | null;
+  evidence_citations?: EvidenceRef[] | null;
+  response_evidence?: EvidenceRef[] | null;
+  response_content?: string | null;
+
+  node_history?: Array<Record<string, unknown>>;
+  error?: Record<string, unknown> | null;
+}
+
+export interface V3TraceResponse {
+  status: 'success' | 'error';
+  data: V3TraceData | null;
+  error: V3ErrorInfo | null;
 }
 
 // ===== 工具函数 =====

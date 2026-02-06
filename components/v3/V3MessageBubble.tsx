@@ -40,9 +40,11 @@ export const V3MessageBubble: React.FC<V3MessageBubbleProps> = ({
   // 用户消息
   if (role === 'user') {
     return (
-      <div className="flex justify-end mb-4">
-        <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-blue-600 text-white">
-          <div className="whitespace-pre-wrap">{content}</div>
+      <div className="flex justify-end mb-5">
+        <div className="max-w-[85%] rounded-2xl px-4 py-3.5 bg-blue-600 text-white shadow-sm">
+          <div className="whitespace-pre-wrap text-[15px] leading-7 tracking-[0.01em] break-words">
+            {content}
+          </div>
         </div>
       </div>
     );
@@ -97,15 +99,15 @@ export const V3MessageBubble: React.FC<V3MessageBubbleProps> = ({
   // Assistant 消息：loading 状态
   if (status === 'loading') {
     return (
-      <div className="flex justify-start mb-4">
-        <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-gray-100 text-gray-900">
+      <div className="flex justify-start mb-5">
+        <div className="max-w-[85%] rounded-2xl px-5 py-4 bg-white border border-gray-200 text-gray-900 shadow-sm">
           {content ? (
             <div
-              className="prose prose-sm max-w-none"
+              className="v3-rich-text text-[15px] leading-7 tracking-[0.01em] break-words"
               dangerouslySetInnerHTML={{ __html: renderedHtml }}
             />
           ) : (
-            <div className="flex items-center gap-2 text-gray-500">
+            <div className="flex items-center gap-2 text-gray-500 text-sm">
               <LoadingDots />
               <span>正在思考...</span>
             </div>
@@ -117,20 +119,13 @@ export const V3MessageBubble: React.FC<V3MessageBubbleProps> = ({
 
   // Assistant 消息：正常状态
   return (
-    <div className="flex justify-start mb-4">
-      <div className="max-w-[80%]">
-        {/* 风险提示条 */}
-        {message.risk_level === 'R2' && (
-          <div className="mb-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-            ⚠️ 此回答涉及高风险内容，请谨慎参考并咨询专业人士
-          </div>
-        )}
-
+    <div className="flex justify-start mb-5">
+      <div className="max-w-[88%]">
         {/* 主消息气泡 */}
-        <div className="rounded-2xl px-4 py-3 bg-gray-100 text-gray-900">
+        <div className="rounded-2xl px-5 py-4 bg-white border border-gray-200 text-gray-900 shadow-sm">
           {content ? (
             <div
-              className="prose prose-sm max-w-none"
+              className="v3-rich-text text-[15px] leading-7 tracking-[0.01em] break-words"
               dangerouslySetInnerHTML={{ __html: renderedHtml }}
             />
           ) : (

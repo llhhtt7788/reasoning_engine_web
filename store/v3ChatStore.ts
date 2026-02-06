@@ -10,14 +10,18 @@ import {
   V3UpstreamMessage,
   MessageStatus,
   EvidenceRef,
+  V3EvidenceChunk,
+  V3TraceData,
   ClarifyQuestion,
   V3ErrorInfo,
+  V3StreamStage,
   RiskLevel,
   QualityDecision,
   generateMessageId,
 } from '@/types/v3Chat';
 import { v3Communicate } from '@/lib/v3Api';
 import { v3StreamChat } from '@/lib/v3SseClient';
+import { fetchV3Trace } from '@/lib/v3TraceApi';
 import { resolveIdentityDefaults } from '@/lib/identityDefaults';
 import { useIdentityStore } from '@/store/identityStore';
 
@@ -36,6 +40,16 @@ interface V3ChatState {
 
   // AbortController 引用（用于中断流式）
   abortController: AbortController | null;
+
+  // V3 流式阶段与证据预览
+  streamStage: V3StreamStage | null;
+  streamEvidence: V3EvidenceChunk[];
+
+  // Trace 可视化数据
+  activeTraceId: string | null;
+  traceDataById: Record<string, V3TraceData>;
+  traceLoading: boolean;
+  traceError: string | null;
 
   // 会话标识
   conversationId: string;
@@ -86,6 +100,10 @@ interface V3ChatState {
 
   // 设置流式状态
   setStreaming: (streaming: boolean, controller?: AbortController | null) => void;
+  setStreamStage: (stage: V3StreamStage | null) => void;
+  setStreamEvidence: (chunks: V3EvidenceChunk[]) => void;
+  setActiveTraceId: (traceId: string | null) => void;
+  loadTrace: (traceId: string, force?: boolean) => Promise<void>;
 
   // 中断当前流式
   abortStream: () => void;
@@ -128,6 +146,12 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
   isStreaming: false,
   streamingMessageId: null,
   abortController: null,
+  streamStage: null,
+  streamEvidence: [],
+  activeTraceId: null,
+  traceDataById: {},
+  traceLoading: false,
+  traceError: null,
   conversationId: generateId(),
   sessionId: generateId(),
 
@@ -340,6 +364,42 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
     set({ isStreaming: streaming, abortController: controller });
   },
 
+  setStreamStage: (stage) => set({ streamStage: stage }),
+
+  setStreamEvidence: (chunks) => set({ streamEvidence: chunks }),
+
+  setActiveTraceId: (traceId) => set({ activeTraceId: traceId }),
+
+  loadTrace: async (traceId, force = false) => {
+    const tid = String(traceId || '').trim();
+    if (!tid) return;
+
+    const cached = get().traceDataById[tid];
+    if (cached && !force) {
+      set({ activeTraceId: tid, traceError: null });
+      return;
+    }
+
+    set({ traceLoading: true, traceError: null, activeTraceId: tid });
+    const resp = await fetchV3Trace(tid);
+    if (resp.status === 'success' && resp.data) {
+      set((state) => ({
+        traceLoading: false,
+        traceError: null,
+        traceDataById: {
+          ...state.traceDataById,
+          [tid]: resp.data!,
+        },
+      }));
+      return;
+    }
+
+    set({
+      traceLoading: false,
+      traceError: resp.error?.message || 'trace 查询失败',
+    });
+  },
+
   abortStream: () => {
     const { abortController, streamingMessageId } = get();
     if (abortController) {
@@ -357,6 +417,12 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
       isStreaming: false,
       streamingMessageId: null,
       abortController: null,
+      streamStage: null,
+      streamEvidence: [],
+      activeTraceId: null,
+      traceDataById: {},
+      traceLoading: false,
+      traceError: null,
     });
   },
 
@@ -381,6 +447,8 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
 
     // 1) 写入 user message（展示层仍用纯文本）
     get().addUserMessage(displayText);
+    get().setStreamEvidence([]);
+    get().setStreamStage(stream ? 'searching' : null);
 
     const identity = resolveIdentityDefaults({
       userId: user_id ?? useIdentityStore.getState().userId,
@@ -413,13 +481,26 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
           risk_level: resp.data?.risk_level,
           intent_type: resp.data?.intent_type,
         });
+        if (resp.data?.trace_id) {
+          get().setActiveTraceId(resp.data.trace_id);
+          void get().loadTrace(resp.data.trace_id);
+        }
       } else if (resp.status === 'clarify' && resp.data?.clarify_question) {
         get().addClarifyCard(resp.data.clarify_question, resp.data.trace_id);
+        if (resp.data?.trace_id) {
+          get().setActiveTraceId(resp.data.trace_id);
+          void get().loadTrace(resp.data.trace_id);
+        }
       } else if (resp.status === 'pending_review') {
         get().addPendingReviewCard(resp.data?.trace_id);
+        if (resp.data?.trace_id) {
+          get().setActiveTraceId(resp.data.trace_id);
+          void get().loadTrace(resp.data.trace_id);
+        }
       } else {
         get().addErrorCard(resp.error ?? { message: '请求失败', recoverable: true }, resp.data?.trace_id);
       }
+      get().setStreamStage(null);
       return;
     }
 
@@ -427,16 +508,31 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
     const messageId = get().addLoadingMessage();
 
     const controller = v3StreamChat(v1Payload, {
+      onStatus: (ev) => {
+        const stage = ev.stage;
+        if (stage === 'searching' || stage === 'generating' || stage === 'validating') {
+          get().setStreamStage(stage);
+        }
+      },
+      onEvidence: (ev) => {
+        get().setStreamEvidence(Array.isArray(ev.chunks) ? ev.chunks : []);
+      },
       onToken: (ev) => {
         if (ev.content) get().appendTokenContent(ev.content);
       },
       onDone: (ev) => {
+        const evidence = (ev.response_evidence ?? ev.citations) as EvidenceRef[] | undefined;
         get().finalizeMessage({
-          evidence: ev.response_evidence,
+          evidence,
           trace_id: ev.trace_id,
           quality_decision: ev.quality_decision,
           risk_level: ev.risk_level,
         });
+        get().setStreamStage(null);
+        if (ev.trace_id) {
+          get().setActiveTraceId(ev.trace_id);
+          void get().loadTrace(ev.trace_id);
+        }
       },
       onError: (ev) => {
         get().markMessageAsError(messageId, {
@@ -444,6 +540,7 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
           message: ev.message,
           recoverable: ev.recoverable,
         });
+        get().setStreamStage(null);
       },
     });
 

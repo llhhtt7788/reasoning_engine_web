@@ -11,3 +11,4 @@ export { EvidenceModal } from './EvidenceModal';
 export { ClarifyCard } from './ClarifyCard';
 export { ErrorCard } from './ErrorCard';
 export { PendingReviewCard } from './PendingReviewCard';
+export { V3TracePanel } from './V3TracePanel';

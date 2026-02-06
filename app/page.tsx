@@ -1,5 +1,5 @@
-import { AppLayout } from '@/components/layout/AppLayout';
+import { V3AppLayout } from '@/components/layout/V3AppLayout';
 
 export default function Home() {
-  return <AppLayout />;
+  return <V3AppLayout />;
 }

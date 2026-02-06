@@ -62,3 +62,9 @@ Content-Type: application/json
   ],
   "stream": true
 }
+
+
+### trace_id
+GET http://127.0.0.1:11211/api/v3/traces/047a9dd2-17bb-4585-93c1-2590aad40929
+
+
