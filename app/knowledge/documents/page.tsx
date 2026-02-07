@@ -7,6 +7,7 @@ import { resolveIdentityDefaults } from '@/lib/identityDefaults';
 import { useKnowledgeUploadsPolling } from '@/lib/useKnowledgeUploadsPolling';
 import { getKnowledgeUploadDetail } from '@/lib/knowledgeUpload';
 import { deleteDocument } from '@/lib/knowledgeApi';
+import { DocumentPreviewModal } from '@/components/knowledge/DocumentPreviewModal';
 import type { KnowledgeUpload, UploadStatus } from '@/types/knowledge';
 
 function statusLabel(status: UploadStatus): { text: string; cls: string } {
@@ -41,6 +42,39 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'indexed', label: '已入库' },
   { value: 'failed', label: '失败' },
 ];
+
+/** Build user-friendly delete result message */
+function buildDeleteMessage(result: {
+  milvus_deleted_chunks?: number;
+  milvus_cleanup_reason?: string;
+}): { text: string; level: 'success' | 'warning' } {
+  const chunks = result.milvus_deleted_chunks;
+  const reason = result.milvus_cleanup_reason;
+
+  // Detect cleanup anomalies
+  const isAnomalous =
+    reason &&
+    (reason.toLowerCase().includes('error') ||
+      reason.toLowerCase().includes('fail') ||
+      reason.toLowerCase().includes('timeout') ||
+      reason.toLowerCase().includes('exception'));
+
+  if (isAnomalous) {
+    return {
+      text: `元数据已删除，但向量清理异常${reason ? `（${reason}）` : ''}，请重试或告警`,
+      level: 'warning',
+    };
+  }
+
+  let text = '文档已删除';
+  if (chunks != null) {
+    text += `，Milvus 已清理 ${chunks} 个 chunks`;
+  }
+  if (reason) {
+    text += `（${reason}）`;
+  }
+  return { text, level: 'success' };
+}
 
 export default function DocumentsPage() {
   const libraries = useKnowledgeStore((s) => s.libraries);
@@ -112,7 +146,14 @@ export default function DocumentsPage() {
   const [detailBusy, setDetailBusy] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [deleteResult, setDeleteResult] = useState<{ id: string; milvus_deleted_chunks?: number; milvus_cleanup_reason?: string } | null>(null);
+  const [deleteResult, setDeleteResult] = useState<{
+    id: string;
+    milvus_deleted_chunks?: number;
+    milvus_cleanup_reason?: string;
+  } | null>(null);
+
+  // Preview state
+  const [previewUpload, setPreviewUpload] = useState<KnowledgeUpload | null>(null);
 
   const handleExpand = useCallback(async (uploadId: string) => {
     const nextOpen = expandedId === uploadId ? null : uploadId;
@@ -136,10 +177,14 @@ export default function DocumentsPage() {
     const ok = window.confirm(`确认删除文档「${upload.original_filename || upload.upload_id}」？`);
     if (!ok) return;
 
+    // Extract user_id and library_id from the row data
+    const rowUserId = upload.meta?.user_id || effectiveUserId;
+    const rowLibraryId = upload.library_id || selectedLibraryId || undefined;
+
     setDeletingId(upload.upload_id);
     setDeleteResult(null);
     try {
-      const result = await deleteDocument(upload.upload_id);
+      const result = await deleteDocument(upload.upload_id, rowUserId, rowLibraryId);
       setDeleteResult({
         id: upload.upload_id,
         milvus_deleted_chunks: result.milvus_deleted_chunks,
@@ -152,6 +197,13 @@ export default function DocumentsPage() {
       setDeletingId(null);
     }
   };
+
+  const handlePreview = (upload: KnowledgeUpload) => {
+    setPreviewUpload(upload);
+  };
+
+  // Delete notification styling
+  const deleteMsg = deleteResult ? buildDeleteMessage(deleteResult) : null;
 
   return (
     <div>
@@ -231,18 +283,23 @@ export default function DocumentsPage() {
       </div>
 
       {/* Delete result notification */}
-      {deleteResult && (
-        <div className="mb-4 p-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800 flex items-center justify-between">
-          <div>
-            文档已删除
-            {deleteResult.milvus_deleted_chunks != null && (
-              <span className="ml-2 text-xs">Milvus 已清理 {deleteResult.milvus_deleted_chunks} 个 chunks</span>
-            )}
-            {deleteResult.milvus_cleanup_reason && (
-              <span className="ml-2 text-xs text-green-600">({deleteResult.milvus_cleanup_reason})</span>
-            )}
-          </div>
-          <button onClick={() => setDeleteResult(null)} className="text-green-600 hover:text-green-800 text-xs">
+      {deleteMsg && deleteResult && (
+        <div
+          className={`mb-4 p-3 rounded-lg text-sm flex items-center justify-between ${
+            deleteMsg.level === 'warning'
+              ? 'bg-amber-50 border border-amber-200 text-amber-800'
+              : 'bg-green-50 border border-green-200 text-green-800'
+          }`}
+        >
+          <div>{deleteMsg.text}</div>
+          <button
+            onClick={() => setDeleteResult(null)}
+            className={`text-xs ${
+              deleteMsg.level === 'warning'
+                ? 'text-amber-600 hover:text-amber-800'
+                : 'text-green-600 hover:text-green-800'
+            }`}
+          >
             关闭
           </button>
         </div>
@@ -289,6 +346,12 @@ export default function DocumentsPage() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handlePreview(it)}
+                            className="text-blue-600 hover:text-blue-700 text-xs"
+                          >
+                            预览
+                          </button>
                           <button
                             onClick={() => void handleExpand(it.upload_id)}
                             className="text-blue-600 hover:text-blue-700 text-xs"
@@ -341,6 +404,17 @@ export default function DocumentsPage() {
           </table>
         )}
       </div>
+
+      {/* Preview modal */}
+      {previewUpload && (
+        <DocumentPreviewModal
+          uploadId={previewUpload.upload_id}
+          userId={previewUpload.meta?.user_id || effectiveUserId}
+          libraryId={previewUpload.library_id || selectedLibraryId || ''}
+          filename={previewUpload.original_filename}
+          onClose={() => setPreviewUpload(null)}
+        />
+      )}
     </div>
   );
 }

@@ -164,6 +164,19 @@ export interface DeleteConnectionProfileResponse {
   [k: string]: unknown;
 }
 
+// ===== 文档预览 =====
+
+export type PreviewMode = 'text' | 'binary';
+
+export interface DocumentPreviewResponse {
+  preview_mode: PreviewMode;
+  preview_text?: string;
+  download_url?: string;
+  content_type?: string;
+  filename?: string;
+  [k: string]: unknown;
+}
+
 // ===== 检索调试类型 =====
 
 export interface RetrievalPlanRequest {

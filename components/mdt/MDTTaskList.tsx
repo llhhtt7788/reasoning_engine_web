@@ -6,7 +6,7 @@ import { useMDTStore } from '@/store/mdtStore';
 import { mockAllDepartments } from '@/lib/mdtMockData';
 
 export const MDTTaskList = () => {
-  const { tasks, selectedDepartment, setSelectedDepartment, loadMoreTasks } = useMDTStore();
+  const { tasks, selectedDepartment, setSelectedDepartment, loadMoreTasks, setHighlightedDepartmentId } = useMDTStore();
 
   return (
     <div className="bg-gray-50 rounded-lg p-6 h-full flex flex-col">
@@ -41,7 +41,7 @@ export const MDTTaskList = () => {
         ) : (
           <>
             {tasks.map((task) => (
-              <MDTTaskCard key={task.id} task={task} />
+              <MDTTaskCard key={task.id} task={task} onDepartmentHover={setHighlightedDepartmentId} />
             ))}
             
             {/* 加载更多 */}

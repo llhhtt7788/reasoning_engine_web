@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { usePatientStore } from '@/store/patientStore';
 import { PatientBasicInfoCard } from '@/components/patient/PatientBasicInfoCard';
 import { PatientTabNavigation } from '@/components/patient/PatientTabNavigation';
@@ -28,7 +29,7 @@ export default function PatientDetailPage() {
 
   if (!patient) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-gray-50">
+      <div className="h-full flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-600">患者不存在</p>
           <button
@@ -43,68 +44,7 @@ export default function PatientDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* 顶部导航栏 */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-[1920px] mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white text-xl font-bold">M</span>
-                </div>
-                <div>
-                  <h1 className="text-lg font-semibold text-gray-900">Med-Go MDT Engine</h1>
-                  <p className="text-xs text-gray-500">多学科会诊系统</p>
-                </div>
-              </div>
-              <nav className="flex items-center space-x-6 ml-12">
-                <a href="/mdt" className="text-sm text-gray-600 hover:text-gray-900">
-                  工作台
-                </a>
-                <a href="/mdt/patients" className="text-sm text-blue-600 font-medium">
-                  患者中心
-                </a>
-                <a href="#" className="text-sm text-gray-600 hover:text-gray-900">
-                  科室能力库
-                </a>
-                <a href="/mdt/records" className="text-sm text-gray-600 hover:text-gray-900">
-                  决策记录
-                </a>
-              </nav>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button className="p-2 text-gray-400 hover:text-gray-600">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                </svg>
-              </button>
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                  <span className="text-gray-600 text-sm font-medium">张</span>
-                </div>
-                <div className="text-sm">
-                  <div className="font-medium text-gray-900">张伟 主任医师</div>
-                  <div className="text-gray-500">外科 - 肝外科</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 主内容区域 */}
+    <div className="h-full overflow-y-auto">
       <div className="max-w-[1920px] mx-auto p-6">
         {/* 返回按钮和标题 */}
         <div className="mb-6">
@@ -303,7 +243,7 @@ export default function PatientDetailPage() {
                             参会科室：{report.participatingDepts.join('、')}
                           </div>
                         </div>
-                        <a
+                        <Link
                           href={`/mdt/records/${report.id}`}
                           className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center space-x-1"
                         >
@@ -316,7 +256,7 @@ export default function PatientDetailPage() {
                               d="M9 5l7 7-7 7"
                             />
                           </svg>
-                        </a>
+                        </Link>
                       </div>
                     ))}
                   </div>

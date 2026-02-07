@@ -18,6 +18,7 @@ import type {
   DeleteSourceResponse,
   DeleteConnectionProfileResponse,
   DeleteDocumentResponse,
+  DocumentPreviewResponse,
 } from '@/types/knowledge';
 
 // ===== Libraries =====
@@ -259,11 +260,47 @@ export async function fetchRetrievalTrace(traceId: string): Promise<RetrievalTra
 
 // ===== Documents =====
 
-export async function deleteDocument(uploadId: string): Promise<DeleteDocumentResponse> {
-  const res = await fetch(`/api/knowledge/documents/${encodeURIComponent(uploadId)}`, {
+export async function deleteDocument(
+  uploadId: string,
+  userId?: string,
+  libraryId?: string,
+): Promise<DeleteDocumentResponse> {
+  const params = new URLSearchParams();
+  if (userId) params.set('user_id', userId);
+  if (libraryId) params.set('library_id', libraryId);
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  const res = await fetch(`/api/knowledge/documents/${encodeURIComponent(uploadId)}${qs}`, {
     method: 'DELETE',
     headers: { Accept: 'application/json' },
   });
   if (!res.ok) throw new Error(`deleteDocument failed: ${res.status}`);
   return res.json();
+}
+
+export async function fetchDocumentPreview(
+  uploadId: string,
+  userId: string,
+  libraryId: string,
+): Promise<DocumentPreviewResponse> {
+  const params = new URLSearchParams({ user_id: userId, library_id: libraryId });
+  const res = await fetch(
+    `/api/knowledge/documents/${encodeURIComponent(uploadId)}/preview?${params.toString()}`,
+    { method: 'GET', headers: { Accept: 'application/json' }, cache: 'no-store' },
+  );
+  if (!res.ok) throw new Error(`fetchDocumentPreview failed: ${res.status}`);
+  return res.json();
+}
+
+export function getDocumentFileUrl(
+  uploadId: string,
+  userId: string,
+  libraryId: string,
+  inline = true,
+): string {
+  const params = new URLSearchParams({
+    user_id: userId,
+    library_id: libraryId,
+    inline: inline ? 'true' : 'false',
+  });
+  return `/api/knowledge/documents/${encodeURIComponent(uploadId)}/file?${params.toString()}`;
 }

@@ -12,6 +12,7 @@ export interface MDTTask {
   status: string;
   statusColor: string;
   createdAt: string;
+  deadline?: string;
 }
 
 export interface DepartmentActivity {
@@ -20,6 +21,21 @@ export interface DepartmentActivity {
   icon: string;
   color: string;
   activityRate: number;
+  departmentId?: string;
+  contributionCases?: string[];
+}
+
+export interface SearchSuggestion {
+  keyword: string;
+  category: '疾病' | '症状' | '手术';
+  matchCount: number;
+}
+
+export interface DeepMetrics {
+  guidelineDeviationAlert: number;
+  timeToConsensus: number;
+  secondReviewCorrectionRate: number;
+  reasoningComputeShare: number;
 }
 
 export interface QualityDistribution {

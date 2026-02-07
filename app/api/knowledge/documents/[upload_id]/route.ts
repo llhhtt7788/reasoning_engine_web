@@ -56,7 +56,12 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ upload_i
   const base = backendBase || fallbackBase;
 
   const { upload_id } = await ctx.params;
-  const upstreamUrl = `${base.replace(/\/$/, '')}/api/knowledge/documents/${encodeURIComponent(upload_id)}`;
+
+  // Forward query params (user_id, library_id)
+  const searchParams = req.nextUrl.searchParams;
+  const qs = searchParams.toString() ? `?${searchParams.toString()}` : '';
+
+  const upstreamUrl = `${base.replace(/\/$/, '')}/api/knowledge/documents/${encodeURIComponent(upload_id)}${qs}`;
 
   const forwardHeaders: Record<string, string> = {};
   const auth = req.headers.get('authorization');
