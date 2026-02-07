@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import { useRouter } from 'next/navigation';
-import { ChatBubbleLeftRightIcon, BookOpenIcon, Cog6ToothIcon, UserCircleIcon } from '@heroicons/react/24/outline';
+import { usePathname, useRouter } from 'next/navigation';
+import { ChatBubbleLeftRightIcon, BookOpenIcon, Cog6ToothIcon, UserCircleIcon, RectangleGroupIcon } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 import { useLayoutStore } from '@/store/layoutStore';
 
@@ -20,27 +20,43 @@ const NavItem = ({ icon: Icon, label, isActive, onClick }: { icon: typeof ChatBu
 );
 
 export const PrimarySidebar: React.FC = () => {
-  const { activeView, setActiveView, isSessionSidebarOpen, toggleSessionSidebar } = useLayoutStore();
+  const { activeView, setActiveView, isSessionSidebarOpen, setSessionSidebarOpen } = useLayoutStore();
   const router = useRouter();
+  const pathname = usePathname();
+  const isHome = pathname === '/';
+  const isKnowledge = pathname.startsWith('/knowledge');
+  const isMdt = pathname.startsWith('/mdt');
 
   return (
     <aside className="w-16 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col items-center py-4 gap-4 z-30">
       <NavItem
         icon={ChatBubbleLeftRightIcon}
         label="对话"
-        isActive={activeView === 'chat' && isSessionSidebarOpen}
+        isActive={isHome && isSessionSidebarOpen}
         onClick={() => {
           setActiveView('chat');
-          toggleSessionSidebar();
+          setSessionSidebarOpen(true);
+          router.push('/');
         }}
       />
 
       <NavItem
         icon={BookOpenIcon}
         label="知识库"
-        isActive={activeView === 'knowledge'}
+        isActive={isKnowledge}
         onClick={() => {
+          setActiveView('knowledge');
           router.push('/knowledge/libraries');
+        }}
+      />
+
+      <NavItem
+        icon={RectangleGroupIcon}
+        label="MDT"
+        isActive={isMdt}
+        onClick={() => {
+          setActiveView('chat');
+          router.push('/mdt');
         }}
       />
 
