@@ -321,10 +321,13 @@ export const V3SessionSidebar: React.FC<V3SessionSidebarProps> = ({ onViewUpload
   const uploadFile = async (file: File) => {
     setUploadStatus('上传中...');
     try {
+      const selectedLibraryIds = useV3ChatStore.getState().selectedLibraryIds;
+      const libraryId = selectedLibraryIds.length === 1 ? selectedLibraryIds[0] : undefined;
       await uploadKnowledgeDocument({
         file,
         userId,
         conversationId: conversationId || currentSessionId || undefined,
+        libraryId,
       });
       setUploadStatus('✓ 上传成功');
       pushToast({ type: 'success', message: '上传成功' });

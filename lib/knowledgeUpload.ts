@@ -7,6 +7,7 @@ export type KnowledgeUploadInput = {
   conversationId?: string;
   appId?: string;
   tags?: string[];
+  libraryId?: string;
 };
 
 export async function uploadKnowledgeDocument(input: KnowledgeUploadInput): Promise<KnowledgeUploadResponse> {
@@ -18,6 +19,7 @@ export async function uploadKnowledgeDocument(input: KnowledgeUploadInput): Prom
   if (input.conversationId) form.append('conversation_id', input.conversationId);
   form.append('app_id', app_id);
   if (input.tags && input.tags.length > 0) form.append('tags', input.tags.join(','));
+  if (input.libraryId) form.append('library_id', input.libraryId);
 
   const res = await fetch('/api/knowledge/documents/upload', {
     method: 'POST',
@@ -36,6 +38,7 @@ export type ListKnowledgeUploadsInput = {
   userId?: string;
   limit?: number;
   offset?: number;
+  libraryId?: string;
 };
 
 function normalizeListResponse(json: unknown): KnowledgeUploadsListResponse {
@@ -61,6 +64,7 @@ export async function listKnowledgeUploads(input: ListKnowledgeUploadsInput): Pr
   qs.set('user_id', user_id);
   qs.set('limit', String(input.limit ?? 50));
   qs.set('offset', String(input.offset ?? 0));
+  if (input.libraryId) qs.set('library_id', input.libraryId);
 
   const res = await fetch(`/api/knowledge/documents?${qs.toString()}`, {
     method: 'GET',

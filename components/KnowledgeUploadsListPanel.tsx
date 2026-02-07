@@ -93,7 +93,7 @@ function mapFailureMessage(err?: string | null): { title: string; body: string; 
   return null;
 }
 
-export const KnowledgeUploadsListPanel: React.FC = () => {
+export const KnowledgeUploadsListPanel: React.FC<{ libraryId?: string }> = ({ libraryId }) => {
   const userIdFromStore = useIdentityStore((s) => s.userId);
   const effectiveUserId = useMemo(
     () => resolveIdentityDefaults({ userId: userIdFromStore }).user_id,
@@ -104,6 +104,7 @@ export const KnowledgeUploadsListPanel: React.FC = () => {
     userId: effectiveUserId,
     limit: 30,
     offset: 0,
+    libraryId,
   });
 
   useEffect(() => {

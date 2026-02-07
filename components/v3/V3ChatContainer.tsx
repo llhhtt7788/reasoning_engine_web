@@ -11,6 +11,7 @@ import { useV3ChatStore } from '@/store/v3ChatStore';
 import { V3MessageList } from './V3MessageList';
 import { useToastStore } from '@/store/toastStore';
 import { InputBar } from '@/components/InputBar';
+import { RetrievalScopeSelector } from '@/components/v3/RetrievalScopeSelector';
 import { uploadVlAsset } from '@/lib/vlAssets';
 import { joinBackendUrl } from '@/lib/backend';
 import { useIdentityStore } from '@/store/identityStore';
@@ -131,6 +132,9 @@ export const V3ChatContainer: React.FC<V3ChatContainerProps> = ({
         onCopyTraceId={handleCopyTraceId}
         debugMode={debugMode}
       />
+
+      {/* 检索范围选择器 */}
+      <RetrievalScopeSelector />
 
       {/* 输入区域：复用主聊天 InputBar，支持图片 */}
       <InputBar

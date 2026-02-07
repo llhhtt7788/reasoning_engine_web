@@ -11,6 +11,7 @@ export type KnowledgeUploadsPollingOptions = {
   userId?: string;
   limit?: number;
   offset?: number;
+  libraryId?: string;
 
   // PRD: 2s for first 30s, then 5s. Stop at 5min.
   fastMs?: number;
@@ -41,6 +42,7 @@ export function useKnowledgeUploadsPolling(opts: KnowledgeUploadsPollingOptions)
     userId,
     limit = 50,
     offset = 0,
+    libraryId,
     fastMs = 2000,
     fastWindowMs = 30_000,
     slowMs = 5000,
@@ -49,7 +51,7 @@ export function useKnowledgeUploadsPolling(opts: KnowledgeUploadsPollingOptions)
 
   const effectiveUserId = useMemo(() => resolveIdentityDefaults({ userId }).user_id, [userId]);
 
-  const stableKey = useMemo(() => `${effectiveUserId}::${limit}::${offset}`, [effectiveUserId, limit, offset]);
+  const stableKey = useMemo(() => `${effectiveUserId}::${limit}::${offset}::${libraryId ?? ''}`, [effectiveUserId, limit, offset, libraryId]);
 
   const [items, setItems] = useState<KnowledgeUpload[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -86,7 +88,7 @@ export function useKnowledgeUploadsPolling(opts: KnowledgeUploadsPollingOptions)
     const run = (async () => {
       try {
         setError(null);
-        const resp = await listKnowledgeUploads({ userId: effectiveUserId, limit, offset });
+        const resp = await listKnowledgeUploads({ userId: effectiveUserId, limit, offset, libraryId });
         const nextItems = resp.items ?? [];
         setItems(nextItems);
         setLastUpdatedAt(Date.now());
@@ -127,7 +129,7 @@ export function useKnowledgeUploadsPolling(opts: KnowledgeUploadsPollingOptions)
 
     inFlightRef.current = run;
     return run;
-  }, [effectiveUserId, limit, offset, fastMs, fastWindowMs, slowMs, maxDurationMs, schedule]);
+  }, [effectiveUserId, limit, offset, libraryId, fastMs, fastWindowMs, slowMs, maxDurationMs, schedule]);
 
   useEffect(() => {
     startRef.current = Date.now();

@@ -18,6 +18,11 @@ import {
   RiskLevel,
   QualityDecision,
   generateMessageId,
+  RagFlowEvent,
+  V3SearchPlanEvent,
+  V3SearchStepEvent,
+  V3RerankStepEvent,
+  V3GapCheckEvent,
 } from '@/types/v3Chat';
 import { v3Communicate } from '@/lib/v3Api';
 import { v3StreamChat } from '@/lib/v3SseClient';
@@ -118,6 +123,31 @@ interface V3ChatState {
   // 获取用于上行的 messages（截断）
   getUpstreamMessages: (maxCount?: number) => V3UpstreamMessage[];
 
+  // ===== RAG 检索范围 =====
+  selectedLibraryIds: string[];
+  selectedSourceIds: string[];
+  retrievalTopK: number | null;
+  retrievalMaxSubqueries: number | null;
+
+  // ===== RAG 流程状态 =====
+  ragFlowEvents: RagFlowEvent[];
+  searchPlan: V3SearchPlanEvent | null;
+  searchSteps: V3SearchStepEvent[];
+  rerankStep: V3RerankStepEvent | null;
+  gapCheck: V3GapCheckEvent | null;
+
+  // ===== RAG Actions =====
+  setSelectedLibraryIds: (ids: string[]) => void;
+  setSelectedSourceIds: (ids: string[]) => void;
+  setRetrievalTopK: (v: number | null) => void;
+  setRetrievalMaxSubqueries: (v: number | null) => void;
+  appendRagFlowEvent: (event: RagFlowEvent) => void;
+  setSearchPlan: (plan: V3SearchPlanEvent | null) => void;
+  appendSearchStep: (step: V3SearchStepEvent) => void;
+  setRerankStep: (step: V3RerankStepEvent | null) => void;
+  setGapCheck: (check: V3GapCheckEvent | null) => void;
+  clearRagState: () => void;
+
   /**
    * 统一发送入口（支持非流式 + 流式），可选附带图片资产 URL。
    * - 当检测到图片时，会自动把最后一个 user message 变成多模态 list，并显式 agent_mode='vl_agent'
@@ -154,6 +184,17 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
   traceError: null,
   conversationId: generateId(),
   sessionId: generateId(),
+
+  // RAG state
+  selectedLibraryIds: [],
+  selectedSourceIds: [],
+  retrievalTopK: null,
+  retrievalMaxSubqueries: null,
+  ragFlowEvents: [],
+  searchPlan: null,
+  searchSteps: [],
+  rerankStep: null,
+  gapCheck: null,
 
   addUserMessage: (content: string) => {
     const message: V3ChatMessage = {
@@ -423,6 +464,12 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
       traceDataById: {},
       traceLoading: false,
       traceError: null,
+      // RAG state
+      ragFlowEvents: [],
+      searchPlan: null,
+      searchSteps: [],
+      rerankStep: null,
+      gapCheck: null,
     });
   },
 
@@ -437,11 +484,29 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
     return upstreamMessages.slice(-maxCount);
   },
 
+  // RAG actions
+  setSelectedLibraryIds: (ids) => set({ selectedLibraryIds: ids }),
+  setSelectedSourceIds: (ids) => set({ selectedSourceIds: ids }),
+  setRetrievalTopK: (v) => set({ retrievalTopK: v }),
+  setRetrievalMaxSubqueries: (v) => set({ retrievalMaxSubqueries: v }),
+  appendRagFlowEvent: (event) => set((s) => ({ ragFlowEvents: [...s.ragFlowEvents, event] })),
+  setSearchPlan: (plan) => set({ searchPlan: plan }),
+  appendSearchStep: (step) => set((s) => ({ searchSteps: [...s.searchSteps, step] })),
+  setRerankStep: (step) => set({ rerankStep: step }),
+  setGapCheck: (check) => set({ gapCheck: check }),
+  clearRagState: () => set({
+    ragFlowEvents: [],
+    searchPlan: null,
+    searchSteps: [],
+    rerankStep: null,
+    gapCheck: null,
+  }),
+
   sendMessage: async ({ queryText, stream = true, imageUrls = [], agent_mode, app_id, user_id }) => {
     const trimmed = queryText.trim();
     const hasImages = imageUrls.length > 0;
 
-    // 允许“只发图不发字”
+    // 允许"只发图不发字"
     const displayText = trimmed.length > 0 ? trimmed : (hasImages ? '[图片]' : '');
     if (!displayText) return;
 
@@ -449,6 +514,7 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
     get().addUserMessage(displayText);
     get().setStreamEvidence([]);
     get().setStreamStage(stream ? 'searching' : null);
+    get().clearRagState();
 
     const identity = resolveIdentityDefaults({
       userId: user_id ?? useIdentityStore.getState().userId,
@@ -456,6 +522,8 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
     });
 
     const conversation_root_id = useIdentityStore.getState().conversationRootId || identity.user_id;
+
+    const { selectedLibraryIds, selectedSourceIds, retrievalTopK, retrievalMaxSubqueries } = get();
 
     // v1-compatible payload (preferred)
     const v1Payload = {
@@ -469,6 +537,11 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
       image_url: hasImages ? imageUrls[0] : undefined,
       // keep: allow explicit agent override, but default to vl_agent when we have images
       agent_mode: agent_mode ?? (hasImages ? 'vl_agent' : undefined),
+      // RAG scope params
+      ...(selectedLibraryIds.length > 0 ? { library_ids: selectedLibraryIds } : {}),
+      ...(selectedSourceIds.length > 0 ? { source_ids: selectedSourceIds } : {}),
+      ...(retrievalTopK != null ? { retrieval_top_k: retrievalTopK } : {}),
+      ...(retrievalMaxSubqueries != null ? { retrieval_max_subqueries: retrievalMaxSubqueries } : {}),
     };
 
     if (!stream) {
@@ -513,9 +586,11 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
         if (stage === 'searching' || stage === 'generating' || stage === 'validating') {
           get().setStreamStage(stage);
         }
+        get().appendRagFlowEvent({ type: 'status', timestamp: Date.now(), data: ev });
       },
       onEvidence: (ev) => {
         get().setStreamEvidence(Array.isArray(ev.chunks) ? ev.chunks : []);
+        get().appendRagFlowEvent({ type: 'evidence', timestamp: Date.now(), data: ev });
       },
       onToken: (ev) => {
         if (ev.content) get().appendTokenContent(ev.content);
@@ -541,6 +616,29 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
           recoverable: ev.recoverable,
         });
         get().setStreamStage(null);
+        get().appendRagFlowEvent({ type: 'error', timestamp: Date.now(), data: ev });
+      },
+      onSearchPlan: (ev) => {
+        get().setSearchPlan(ev);
+        get().appendRagFlowEvent({ type: 'search_plan', timestamp: Date.now(), data: ev });
+      },
+      onSearchStep: (ev) => {
+        get().appendSearchStep(ev);
+        get().appendRagFlowEvent({ type: 'search_step', timestamp: Date.now(), data: ev });
+      },
+      onRerankStep: (ev) => {
+        get().setRerankStep(ev);
+        get().appendRagFlowEvent({ type: 'rerank_step', timestamp: Date.now(), data: ev });
+      },
+      onGapCheck: (ev) => {
+        get().setGapCheck(ev);
+        get().appendRagFlowEvent({ type: 'gap_check', timestamp: Date.now(), data: ev });
+      },
+      onRoute: (ev) => {
+        get().appendRagFlowEvent({ type: 'route', timestamp: Date.now(), data: ev });
+      },
+      onExecute: (ev) => {
+        get().appendRagFlowEvent({ type: 'execute', timestamp: Date.now(), data: ev });
       },
     });
 

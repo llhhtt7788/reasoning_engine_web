@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { ChatBubbleLeftRightIcon, BookOpenIcon, Cog6ToothIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 import { useLayoutStore } from '@/store/layoutStore';
@@ -20,6 +21,7 @@ const NavItem = ({ icon: Icon, label, isActive, onClick }: { icon: typeof ChatBu
 
 export const PrimarySidebar: React.FC = () => {
   const { activeView, setActiveView, isSessionSidebarOpen, toggleSessionSidebar } = useLayoutStore();
+  const router = useRouter();
 
   return (
     <aside className="w-16 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col items-center py-4 gap-4 z-30">
@@ -37,7 +39,9 @@ export const PrimarySidebar: React.FC = () => {
         icon={BookOpenIcon}
         label="知识库"
         isActive={activeView === 'knowledge'}
-        onClick={() => setActiveView('knowledge')}
+        onClick={() => {
+          router.push('/knowledge/libraries');
+        }}
       />
 
       <div className="flex-1" />

@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { KnowledgeUploadsListPanel } from './KnowledgeUploadsListPanel';
 
 type KnowledgeUploadsModalProps = {
@@ -16,7 +17,16 @@ export const KnowledgeUploadsModal: React.FC<KnowledgeUploadsModalProps> = ({ is
       <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full mx-4 max-h-[90vh] flex flex-col overflow-hidden animate-scale-in">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h3 className="text-xl font-semibold text-gray-900">📋 知识文档上传记录</h3>
+          <div className="flex items-center gap-3">
+            <h3 className="text-xl font-semibold text-gray-900">知识文档上传记录</h3>
+            <Link
+              href="/knowledge/libraries"
+              onClick={onClose}
+              className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
+            >
+              管理知识库 &rarr;
+            </Link>
+          </div>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"

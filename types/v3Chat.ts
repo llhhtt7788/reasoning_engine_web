@@ -124,6 +124,12 @@ export interface V3CommunicateRequest {
 
   /** Agent 路由覆写（例如："vl_agent"） */
   agent_mode?: string;
+
+  // Agentic RAG 检索范围参数
+  library_ids?: string[];
+  source_ids?: string[];
+  retrieval_top_k?: number;
+  retrieval_max_subqueries?: number;
 }
 
 // ===== API 响应体 =====
@@ -173,12 +179,77 @@ export interface V3DoneEvent {
   intent_type?: string;
   quality_check?: Record<string, unknown>;
   meta?: Record<string, unknown>;
+  retrieval_plan?: Record<string, unknown>;
+  retrieval_timeline?: Record<string, unknown>[];
+  retrieval_stats?: Record<string, unknown>;
 }
 
 export interface V3ErrorEvent {
   code?: string;
   message: string;
   recoverable?: boolean;
+}
+
+// ===== Agentic RAG SSE 事件 =====
+
+export interface V3SearchPlanEvent {
+  query: string;
+  subqueries: string[];
+  source_count: number;
+  sources: Array<{ source_id: string; backend_type?: string; name?: string }>;
+}
+
+export interface V3SearchStepEvent {
+  source_id: string;
+  backend_type: string;
+  query: string;
+  hits: number;
+  selected: number;
+  reason?: string;
+  elapsed_ms: number;
+}
+
+export interface V3RerankStepEvent {
+  input_candidates: number;
+  deduped_candidates: number;
+  selected: number;
+}
+
+export interface V3GapCheckEvent {
+  need_more: boolean;
+}
+
+export interface V3RouteEvent {
+  route_decision: string;
+  intent_type?: string;
+  complexity?: string;
+  risk_level?: string;
+  [key: string]: unknown;
+}
+
+export interface V3ExecuteEvent {
+  agent_name: string;
+  step: string;
+  [key: string]: unknown;
+}
+
+// ===== RAG 统一时间轴事件 =====
+
+export type RagFlowEventType =
+  | 'status'
+  | 'evidence'
+  | 'search_plan'
+  | 'search_step'
+  | 'rerank_step'
+  | 'gap_check'
+  | 'route'
+  | 'execute'
+  | 'error';
+
+export interface RagFlowEvent {
+  type: RagFlowEventType;
+  timestamp: number;
+  data: unknown;
 }
 
 export interface V3TraceData {

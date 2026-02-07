@@ -11,6 +11,12 @@ import {
   V3EvidenceEvent,
   V3DoneEvent,
   V3ErrorEvent,
+  V3SearchPlanEvent,
+  V3SearchStepEvent,
+  V3RerankStepEvent,
+  V3GapCheckEvent,
+  V3RouteEvent,
+  V3ExecuteEvent,
 } from '@/types/v3Chat';
 
 const V3_API_URL = process.env.NEXT_PUBLIC_V3_API_URL || '/api/v3/communicate';
@@ -21,6 +27,12 @@ export interface V3StreamCallbacks {
   onToken: (event: V3TokenEvent) => void;
   onDone: (event: V3DoneEvent) => void;
   onError: (event: V3ErrorEvent) => void;
+  onSearchPlan?: (event: V3SearchPlanEvent) => void;
+  onSearchStep?: (event: V3SearchStepEvent) => void;
+  onRerankStep?: (event: V3RerankStepEvent) => void;
+  onGapCheck?: (event: V3GapCheckEvent) => void;
+  onRoute?: (event: V3RouteEvent) => void;
+  onExecute?: (event: V3ExecuteEvent) => void;
 }
 
 interface SSEFrame {
@@ -181,6 +193,57 @@ export function v3StreamChat(
               code: typeof payload.code === 'string' ? payload.code : undefined,
               message: typeof payload.message === 'string' ? payload.message : '流式传输错误',
               recoverable: typeof payload.recoverable === 'boolean' ? payload.recoverable : true,
+            });
+            break;
+
+          case 'search_plan':
+            callbacks.onSearchPlan?.({
+              query: typeof payload.query === 'string' ? payload.query : '',
+              subqueries: Array.isArray(payload.subqueries) ? payload.subqueries : [],
+              source_count: typeof payload.source_count === 'number' ? payload.source_count : 0,
+              sources: Array.isArray(payload.sources) ? payload.sources : [],
+            });
+            break;
+
+          case 'search_step':
+            callbacks.onSearchStep?.({
+              source_id: typeof payload.source_id === 'string' ? payload.source_id : '',
+              backend_type: typeof payload.backend_type === 'string' ? payload.backend_type : '',
+              query: typeof payload.query === 'string' ? payload.query : '',
+              hits: typeof payload.hits === 'number' ? payload.hits : 0,
+              selected: typeof payload.selected === 'number' ? payload.selected : 0,
+              reason: typeof payload.reason === 'string' ? payload.reason : undefined,
+              elapsed_ms: typeof payload.elapsed_ms === 'number' ? payload.elapsed_ms : 0,
+            });
+            break;
+
+          case 'rerank_step':
+            callbacks.onRerankStep?.({
+              input_candidates: typeof payload.input_candidates === 'number' ? payload.input_candidates : 0,
+              deduped_candidates: typeof payload.deduped_candidates === 'number' ? payload.deduped_candidates : 0,
+              selected: typeof payload.selected === 'number' ? payload.selected : 0,
+            });
+            break;
+
+          case 'gap_check':
+            callbacks.onGapCheck?.({
+              need_more: typeof payload.need_more === 'boolean' ? payload.need_more : false,
+            });
+            break;
+
+          case 'route':
+            callbacks.onRoute?.({
+              route_decision: typeof payload.route_decision === 'string' ? payload.route_decision : '',
+              intent_type: typeof payload.intent_type === 'string' ? payload.intent_type : undefined,
+              complexity: typeof payload.complexity === 'string' ? payload.complexity : undefined,
+              risk_level: typeof payload.risk_level === 'string' ? payload.risk_level : undefined,
+            });
+            break;
+
+          case 'execute':
+            callbacks.onExecute?.({
+              agent_name: typeof payload.agent_name === 'string' ? payload.agent_name : '',
+              step: typeof payload.step === 'string' ? payload.step : '',
             });
             break;
 

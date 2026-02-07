@@ -50,3 +50,35 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ upload_id: 
   });
 }
 
+export async function DELETE(req: NextRequest, ctx: { params: Promise<{ upload_id: string }> }) {
+  const backendBase = process.env.NEXT_PUBLIC_BACKEND_BASE_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL;
+  const fallbackBase = 'http://localhost:11211';
+  const base = backendBase || fallbackBase;
+
+  const { upload_id } = await ctx.params;
+  const upstreamUrl = `${base.replace(/\/$/, '')}/api/knowledge/documents/${encodeURIComponent(upload_id)}`;
+
+  const forwardHeaders: Record<string, string> = {};
+  const auth = req.headers.get('authorization');
+  if (auth) forwardHeaders['Authorization'] = auth;
+
+  try {
+    const upstreamRes = await fetch(upstreamUrl, {
+      method: 'DELETE',
+      headers: forwardHeaders,
+      cache: 'no-store',
+    });
+    const respHeaders = new Headers();
+    const ct = upstreamRes.headers.get('content-type');
+    if (ct) respHeaders.set('content-type', ct);
+    respHeaders.set('cache-control', 'no-store');
+    return new Response(upstreamRes.body, { status: upstreamRes.status, headers: respHeaders });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return Response.json(
+      { error: 'Upstream fetch failed', message },
+      { status: 502, headers: { 'cache-control': 'no-store' } },
+    );
+  }
+}
+

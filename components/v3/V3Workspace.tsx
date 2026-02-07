@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { V3ChatContainer } from '@/components/v3/V3ChatContainer';
-import { V3TracePanel } from '@/components/v3/V3TracePanel';
+import { V3RightPanel } from '@/components/v3/V3RightPanel';
 import { useV3ChatStore } from '@/store/v3ChatStore';
 
 type V3WorkspaceProps = {
@@ -72,7 +72,7 @@ export function V3Workspace({ embedded = false }: V3WorkspaceProps) {
             className={[
               'h-full grid gap-3',
               showThinking
-                ? 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px]'
+                ? 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px]'
                 : 'grid-cols-1',
             ].join(' ')}
           >
@@ -81,7 +81,7 @@ export function V3Workspace({ embedded = false }: V3WorkspaceProps) {
             </div>
             {showThinking ? (
               <div className="min-h-0">
-                <V3TracePanel />
+                <V3RightPanel />
               </div>
             ) : null}
           </div>
