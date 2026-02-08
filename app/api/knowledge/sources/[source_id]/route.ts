@@ -17,7 +17,9 @@ export async function DELETE(
 ) {
   const { source_id } = await params;
   const base = getBackendBase();
-  const upstreamUrl = `${base}/api/knowledge/sources/${encodeURIComponent(source_id)}`;
+  const url = new URL(req.url);
+  const qs = url.searchParams.toString() ? `?${url.searchParams.toString()}` : '';
+  const upstreamUrl = `${base}/api/knowledge/sources/${encodeURIComponent(source_id)}${qs}`;
 
   const forwardHeaders: Record<string, string> = {};
   const auth = req.headers.get('authorization');

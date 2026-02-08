@@ -2,6 +2,7 @@
 /**
  * 知识引擎 API 客户端
  * 所有请求走同源代理 /api/knowledge/...
+ * 所有请求携带 user_id（后端强制要求）
  */
 
 import type {
@@ -20,11 +21,14 @@ import type {
   DeleteDocumentResponse,
   DocumentPreviewResponse,
 } from '@/types/knowledge';
+import { resolveIdentityDefaults } from '@/lib/identityDefaults';
 
 // ===== Libraries =====
 
 export async function listLibraries(): Promise<KnowledgeLibrary[]> {
-  const res = await fetch('/api/knowledge/libraries', {
+  const { user_id } = resolveIdentityDefaults();
+  const params = new URLSearchParams({ user_id });
+  const res = await fetch(`/api/knowledge/libraries?${params.toString()}`, {
     method: 'GET',
     headers: { Accept: 'application/json' },
     cache: 'no-store',
@@ -35,10 +39,11 @@ export async function listLibraries(): Promise<KnowledgeLibrary[]> {
 }
 
 export async function createLibrary(data: { name: string; description?: string }): Promise<KnowledgeLibrary> {
+  const { user_id } = resolveIdentityDefaults();
   const res = await fetch('/api/knowledge/libraries', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify({ ...data, user_id }),
   });
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
@@ -48,27 +53,31 @@ export async function createLibrary(data: { name: string; description?: string }
 }
 
 export async function updateLibrary(libraryId: string, data: { name?: string; description?: string }): Promise<KnowledgeLibrary> {
+  const { user_id } = resolveIdentityDefaults();
   const res = await fetch(`/api/knowledge/libraries/${encodeURIComponent(libraryId)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify({ ...data, user_id }),
   });
   if (!res.ok) throw new Error(`updateLibrary failed: ${res.status}`);
   return res.json();
 }
 
 export async function patchLibrary(libraryId: string, data: { status?: string }): Promise<KnowledgeLibrary> {
+  const { user_id } = resolveIdentityDefaults();
   const res = await fetch(`/api/knowledge/libraries/${encodeURIComponent(libraryId)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify({ ...data, user_id }),
   });
   if (!res.ok) throw new Error(`patchLibrary failed: ${res.status}`);
   return res.json();
 }
 
 export async function getLibraryDetail(libraryId: string): Promise<LibraryDetail> {
-  const res = await fetch(`/api/knowledge/libraries/${encodeURIComponent(libraryId)}`, {
+  const { user_id } = resolveIdentityDefaults();
+  const params = new URLSearchParams({ user_id });
+  const res = await fetch(`/api/knowledge/libraries/${encodeURIComponent(libraryId)}?${params.toString()}`, {
     method: 'GET',
     headers: { Accept: 'application/json' },
     cache: 'no-store',
@@ -83,8 +92,10 @@ export interface DeleteLibraryError {
 }
 
 export async function deleteLibrary(libraryId: string, force = false): Promise<DeleteLibraryResponse> {
-  const qs = force ? '?force=true' : '';
-  const res = await fetch(`/api/knowledge/libraries/${encodeURIComponent(libraryId)}${qs}`, {
+  const { user_id } = resolveIdentityDefaults();
+  const params = new URLSearchParams({ user_id });
+  if (force) params.set('force', 'true');
+  const res = await fetch(`/api/knowledge/libraries/${encodeURIComponent(libraryId)}?${params.toString()}`, {
     method: 'DELETE',
     headers: { Accept: 'application/json' },
   });
@@ -102,11 +113,11 @@ export async function deleteLibrary(libraryId: string, force = false): Promise<D
 // ===== Sources =====
 
 export async function listSources(libraryId?: string, connectionProfileId?: string): Promise<KnowledgeSource[]> {
-  const params = new URLSearchParams();
+  const { user_id } = resolveIdentityDefaults();
+  const params = new URLSearchParams({ user_id });
   if (libraryId) params.set('library_id', libraryId);
   if (connectionProfileId) params.set('connection_profile_id', connectionProfileId);
-  const qs = params.toString() ? `?${params.toString()}` : '';
-  const res = await fetch(`/api/knowledge/sources${qs}`, {
+  const res = await fetch(`/api/knowledge/sources?${params.toString()}`, {
     method: 'GET',
     headers: { Accept: 'application/json' },
     cache: 'no-store',
@@ -123,10 +134,11 @@ export async function createSource(data: {
   connection_profile_id?: string;
   description?: string;
 }): Promise<KnowledgeSource> {
+  const { user_id } = resolveIdentityDefaults();
   const res = await fetch('/api/knowledge/sources', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify({ ...data, user_id }),
   });
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
@@ -136,26 +148,31 @@ export async function createSource(data: {
 }
 
 export async function updateSource(sourceId: string, data: Record<string, unknown>): Promise<KnowledgeSource> {
+  const { user_id } = resolveIdentityDefaults();
   const res = await fetch(`/api/knowledge/sources/${encodeURIComponent(sourceId)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify({ ...data, user_id }),
   });
   if (!res.ok) throw new Error(`updateSource failed: ${res.status}`);
   return res.json();
 }
 
 export async function checkSourceHealth(sourceId: string): Promise<{ health_status: string; message?: string }> {
+  const { user_id } = resolveIdentityDefaults();
   const res = await fetch(`/api/knowledge/sources/${encodeURIComponent(sourceId)}/health`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id }),
   });
   if (!res.ok) throw new Error(`checkSourceHealth failed: ${res.status}`);
   return res.json();
 }
 
 export async function deleteSource(sourceId: string): Promise<DeleteSourceResponse> {
-  const res = await fetch(`/api/knowledge/sources/${encodeURIComponent(sourceId)}`, {
+  const { user_id } = resolveIdentityDefaults();
+  const params = new URLSearchParams({ user_id });
+  const res = await fetch(`/api/knowledge/sources/${encodeURIComponent(sourceId)}?${params.toString()}`, {
     method: 'DELETE',
     headers: { Accept: 'application/json' },
   });
@@ -166,7 +183,9 @@ export async function deleteSource(sourceId: string): Promise<DeleteSourceRespon
 // ===== Connection Profiles =====
 
 export async function listConnectionProfiles(): Promise<ConnectionProfile[]> {
-  const res = await fetch('/api/knowledge/sources/connection-profiles', {
+  const { user_id } = resolveIdentityDefaults();
+  const params = new URLSearchParams({ user_id });
+  const res = await fetch(`/api/knowledge/sources/connection-profiles?${params.toString()}`, {
     method: 'GET',
     headers: { Accept: 'application/json' },
     cache: 'no-store',
@@ -182,10 +201,11 @@ export async function createConnectionProfile(data: {
   connection_params?: Record<string, unknown>;
   description?: string;
 }): Promise<ConnectionProfile> {
+  const { user_id } = resolveIdentityDefaults();
   const res = await fetch('/api/knowledge/sources/connection-profiles', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify({ ...data, user_id }),
   });
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
@@ -198,18 +218,21 @@ export async function patchConnectionProfile(
   profileId: string,
   data: { name?: string; description?: string; connection_params?: Record<string, unknown> },
 ): Promise<ConnectionProfile> {
+  const { user_id } = resolveIdentityDefaults();
   const res = await fetch(`/api/knowledge/sources/connection-profiles/${encodeURIComponent(profileId)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify({ ...data, user_id }),
   });
   if (!res.ok) throw new Error(`patchConnectionProfile failed: ${res.status}`);
   return res.json();
 }
 
 export async function deleteConnectionProfile(profileId: string, force = false): Promise<DeleteConnectionProfileResponse> {
-  const qs = force ? '?force=true' : '';
-  const res = await fetch(`/api/knowledge/sources/connection-profiles/${encodeURIComponent(profileId)}${qs}`, {
+  const { user_id } = resolveIdentityDefaults();
+  const params = new URLSearchParams({ user_id });
+  if (force) params.set('force', 'true');
+  const res = await fetch(`/api/knowledge/sources/connection-profiles/${encodeURIComponent(profileId)}?${params.toString()}`, {
     method: 'DELETE',
     headers: { Accept: 'application/json' },
   });
@@ -227,20 +250,22 @@ export async function deleteConnectionProfile(profileId: string, force = false):
 // ===== Retrieval Debug =====
 
 export async function fetchRetrievalPlan(req: RetrievalPlanRequest): Promise<RetrievalPlanResponse> {
+  const { user_id } = resolveIdentityDefaults();
   const res = await fetch('/api/knowledge/retrieval/plan', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(req),
+    body: JSON.stringify({ ...req, user_id }),
   });
   if (!res.ok) throw new Error(`fetchRetrievalPlan failed: ${res.status}`);
   return res.json();
 }
 
 export async function fetchRetrievalPreview(req: RetrievalPreviewRequest): Promise<RetrievalPreviewResponse> {
+  const { user_id } = resolveIdentityDefaults();
   const res = await fetch('/api/knowledge/retrieval/preview', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(req),
+    body: JSON.stringify({ ...req, user_id }),
   });
   if (!res.ok) throw new Error(`fetchRetrievalPreview failed: ${res.status}`);
   return res.json();
@@ -249,7 +274,9 @@ export async function fetchRetrievalPreview(req: RetrievalPreviewRequest): Promi
 // ===== Retrieval Trace =====
 
 export async function fetchRetrievalTrace(traceId: string): Promise<RetrievalTraceData> {
-  const res = await fetch(`/api/knowledge/retrieval/traces/${encodeURIComponent(traceId)}`, {
+  const { user_id } = resolveIdentityDefaults();
+  const params = new URLSearchParams({ user_id });
+  const res = await fetch(`/api/knowledge/retrieval/traces/${encodeURIComponent(traceId)}?${params.toString()}`, {
     method: 'GET',
     headers: { Accept: 'application/json' },
     cache: 'no-store',
@@ -265,11 +292,10 @@ export async function deleteDocument(
   userId?: string,
   libraryId?: string,
 ): Promise<DeleteDocumentResponse> {
-  const params = new URLSearchParams();
-  if (userId) params.set('user_id', userId);
+  const { user_id } = resolveIdentityDefaults({ userId });
+  const params = new URLSearchParams({ user_id });
   if (libraryId) params.set('library_id', libraryId);
-  const qs = params.toString() ? `?${params.toString()}` : '';
-  const res = await fetch(`/api/knowledge/documents/${encodeURIComponent(uploadId)}${qs}`, {
+  const res = await fetch(`/api/knowledge/documents/${encodeURIComponent(uploadId)}?${params.toString()}`, {
     method: 'DELETE',
     headers: { Accept: 'application/json' },
   });

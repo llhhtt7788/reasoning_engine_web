@@ -17,7 +17,9 @@ export async function GET(
 ) {
   const { library_id } = await params;
   const base = getBackendBase();
-  const upstreamUrl = `${base}/api/knowledge/libraries/${encodeURIComponent(library_id)}`;
+  const url = new URL(req.url);
+  const qs = url.searchParams.toString() ? `?${url.searchParams.toString()}` : '';
+  const upstreamUrl = `${base}/api/knowledge/libraries/${encodeURIComponent(library_id)}${qs}`;
 
   const forwardHeaders: Record<string, string> = {};
   const auth = req.headers.get('authorization');
@@ -50,8 +52,7 @@ export async function DELETE(
   const { library_id } = await params;
   const base = getBackendBase();
   const url = new URL(req.url);
-  const force = url.searchParams.get('force');
-  const qs = force ? `?force=${force}` : '';
+  const qs = url.searchParams.toString() ? `?${url.searchParams.toString()}` : '';
   const upstreamUrl = `${base}/api/knowledge/libraries/${encodeURIComponent(library_id)}${qs}`;
 
   const forwardHeaders: Record<string, string> = {};

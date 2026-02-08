@@ -12,6 +12,7 @@ export async function GET(
   const searchParams = request.nextUrl.searchParams;
   const limit = searchParams.get('limit') || '50';
   const offset = searchParams.get('offset') || '0';
+  const userId = searchParams.get('user_id') || '';
 
   if (!conversationId) {
     return NextResponse.json(
@@ -25,6 +26,7 @@ export async function GET(
       limit,
       offset,
     });
+    if (userId) backendParams.set('user_id', userId);
 
     const backendResponse = await fetch(
       `${BACKEND_URL}/api/v1/conversations/${encodeURIComponent(conversationId)}/sessions?${backendParams.toString()}`,

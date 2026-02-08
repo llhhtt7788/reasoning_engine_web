@@ -4,6 +4,8 @@
  * 对接后端的会话列表相关接口
  */
 
+import { resolveIdentityDefaults } from '@/lib/identityDefaults';
+
 export type ConversationItem = {
   conversation_id: string;
   conversation_root_id?: string;
@@ -75,12 +77,15 @@ export async function fetchConversationList(params: {
  */
 export async function fetchConversationSessions(params: {
   conversationId: string;
+  userId?: string;
   limit?: number;
   offset?: number;
 }): Promise<SessionListResponse> {
-  const { conversationId, limit = 50, offset = 0 } = params;
+  const { conversationId, userId, limit = 50, offset = 0 } = params;
 
+  const { user_id } = resolveIdentityDefaults({ userId });
   const queryParams = new URLSearchParams({
+    user_id,
     limit: String(limit),
     offset: String(offset),
   });

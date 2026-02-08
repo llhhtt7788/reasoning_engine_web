@@ -52,8 +52,7 @@ export async function DELETE(
   const { profile_id } = await params;
   const base = getBackendBase();
   const url = new URL(req.url);
-  const force = url.searchParams.get('force');
-  const qs = force ? `?force=${force}` : '';
+  const qs = url.searchParams.toString() ? `?${url.searchParams.toString()}` : '';
   const upstreamUrl = `${base}/api/knowledge/sources/connection-profiles/${encodeURIComponent(profile_id)}${qs}`;
 
   const forwardHeaders: Record<string, string> = {};

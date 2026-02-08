@@ -83,8 +83,10 @@ export async function listKnowledgeUploads(input: ListKnowledgeUploadsInput): Pr
   return normalizeListResponse(json);
 }
 
-export async function getKnowledgeUploadDetail(uploadId: string): Promise<KnowledgeUpload> {
-  const res = await fetch(`/api/knowledge/documents/${encodeURIComponent(uploadId)}`, {
+export async function getKnowledgeUploadDetail(uploadId: string, userId?: string): Promise<KnowledgeUpload> {
+  const { user_id } = resolveIdentityDefaults({ userId });
+  const params = new URLSearchParams({ user_id });
+  const res = await fetch(`/api/knowledge/documents/${encodeURIComponent(uploadId)}?${params.toString()}`, {
     method: 'GET',
     headers: {
       'Accept': 'application/json',

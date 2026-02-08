@@ -12,7 +12,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ upload_id: 
 
   const { upload_id } = await ctx.params;
 
-  const upstreamUrl = `${base.replace(/\/$/, '')}/api/knowledge/documents/${encodeURIComponent(upload_id)}`;
+  const url = new URL(req.url);
+  const qs = url.searchParams.toString() ? `?${url.searchParams.toString()}` : '';
+  const upstreamUrl = `${base.replace(/\/$/, '')}/api/knowledge/documents/${encodeURIComponent(upload_id)}${qs}`;
 
   const forwardHeaders: Record<string, string> = {};
   const auth = req.headers.get('authorization');
