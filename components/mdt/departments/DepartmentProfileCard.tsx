@@ -53,7 +53,7 @@ export const DepartmentProfileCard: React.FC<DepartmentProfileCardProps> = ({ de
           </div>
           <div>
             <h2 className="text-lg font-bold text-gray-900">{department.name}</h2>
-            <p className="text-sm text-gray-500">{department.hospital} · {department.headDoctor}</p>
+            <p className="text-sm text-gray-500">{department.hospital ? `${department.hospital} · ` : ''}{department.headDoctor}</p>
           </div>
         </div>
         <div className="text-right">

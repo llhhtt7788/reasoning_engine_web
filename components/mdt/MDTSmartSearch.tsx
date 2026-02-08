@@ -52,7 +52,11 @@ export const MDTSmartSearch: React.FC = () => {
       name: CAPABILITY_LABEL_CN[key].slice(0, 4),
       max: 100,
     }));
-    const values = CAPABILITY_LABELS.map((key) => dept.capability[key]);
+    const values = CAPABILITY_LABELS.map((key) => {
+      const base = dept.capability[key];
+      const jitter = Math.random() * 3 - 1.5;
+      return Math.max(0, Math.min(100, +(base + jitter).toFixed(1)));
+    });
 
     return {
       radar: {

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import type { Department } from '@/types/department';
 import { CAPABILITY_LABELS, CAPABILITY_LABEL_CN } from '@/types/department';
@@ -17,7 +17,15 @@ interface CapabilityRadarChartProps {
 
 /** 中栏：ECharts 6 维雷达图 + 院内基准线 */
 export const CapabilityRadarChart: React.FC<CapabilityRadarChartProps> = ({ department }) => {
-  const values = CAPABILITY_LABELS.map((key) => department.capability[key]);
+  // 渲染时微抖动，让雷达图更生动（±1.5 范围内）
+  const values = useMemo(
+    () => CAPABILITY_LABELS.map((key) => {
+      const base = department.capability[key];
+      const jitter = Math.random() * 3 - 1.5;
+      return Math.max(0, Math.min(100, +(base + jitter).toFixed(1)));
+    }),
+    [department.id] // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const indicators = CAPABILITY_LABELS.map((key) => ({
     name: CAPABILITY_LABEL_CN[key],
     max: 100,

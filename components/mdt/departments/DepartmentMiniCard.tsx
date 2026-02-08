@@ -56,7 +56,11 @@ export const DepartmentMiniCard: React.FC<DepartmentMiniCardProps> = ({
             </div>
             <div>
               <h3 className="font-semibold text-gray-900">{department.name}</h3>
-              <p className="text-xs text-gray-500">{department.hospital}</p>
+              {department.hospital ? (
+                <p className="text-xs text-gray-500">{department.hospital}</p>
+              ) : (
+                <p className="text-xs text-gray-400">通用标准学科模型</p>
+              )}
             </div>
           </div>
           {/* AI 评分 */}

@@ -18,8 +18,8 @@ export const HOSPITAL_COLORS: Record<string, string> = {
   '复旦大学附属华山医院': '#0D9488',   // teal-600
 };
 
-/** 10 个科室 Mock 数据 */
-export const mockDepartments: Department[] = [
+/** 10 个医院科室 Mock 数据 */
+const _hospitalDepartments: Department[] = [
   // ─── 复旦大学附属肿瘤医院 · 乳腺科 ───
   {
     id: 'fudan-breast',
@@ -608,6 +608,257 @@ export const mockDepartments: Department[] = [
   },
 ];
 
+// ─────────────────────────────────────────────────────────────
+//  37 个通用标准学科模型（无医院归属）
+// ─────────────────────────────────────────────────────────────
+
+interface _CompactDept {
+  name: string; id: string; icon: string; color: string; bgColor: string;
+  aiScore: number; tags: [string, string, string]; desc: string;
+  radar: [number, number, number, number, number]; // 诊断, 创新, 风险, 协作, 影像
+  memberCount: number; recentCases: number;
+  extraTerms: string[];
+}
+
+function _buildDept(d: _CompactDept): Department {
+  const tp = Math.round((d.radar[0] + d.radar[1] + d.radar[2]) / 3);
+  const baseAdopt = Math.round(d.aiScore * 0.85);
+  const months = ['3月','4月','5月','6月','7月','8月','9月','10月','11月','12月','1月','2月'];
+  const monthlyDecisions = months.map((m, i) => ({
+    month: m,
+    adoptionRate: Math.min(99, baseAdopt + Math.floor(i * 0.8)),
+    participationCount: 30 + Math.floor(i * 3) + (d.aiScore > 93 ? 15 : 0),
+  }));
+  const p = d.id.replace(/-/g, '').slice(0, 4);
+  const allTerms = [...d.tags, ...d.extraTerms];
+  const knowledgeNodes = [
+    { id: `${p}0`, name: d.name, category: 0, symbolSize: 55, value: d.aiScore },
+    ...allTerms.map((t, i) => ({
+      id: `${p}${i + 1}`, name: t, category: (i % 2) + 1,
+      symbolSize: 28 + (i < 3 ? 6 : 0), value: 80 + ((d.aiScore + i * 7) % 18),
+    })),
+  ];
+  const knowledgeEdges = [
+    ...allTerms.map((_, i) => ({ source: `${p}0`, target: `${p}${i + 1}` })),
+    ...(allTerms.length >= 2 ? [{ source: `${p}1`, target: `${p}2` }] : []),
+    ...(allTerms.length >= 4 ? [{ source: `${p}3`, target: `${p}4` }] : []),
+    ...(allTerms.length >= 6 ? [{ source: `${p}2`, target: `${p}5` }] : []),
+    ...(allTerms.length >= 7 ? [{ source: `${p}4`, target: `${p}6` }, { source: `${p}1`, target: `${p}7` }] : []),
+  ];
+  return {
+    id: d.id, name: d.name, hospital: '', icon: d.icon, color: d.color, bgColor: d.bgColor,
+    description: d.desc, headDoctor: '学科带头人团队', memberCount: d.memberCount, aiScore: d.aiScore,
+    capability: {
+      diagnosticAccuracy: d.radar[0], solutionInnovation: d.radar[1], riskControl: d.radar[2],
+      collaborationSpeed: d.radar[3], imagingAnalysis: d.radar[4], treatmentPlanning: tp,
+    },
+    monthlyDecisions, knowledgeNodes, knowledgeEdges, specialties: d.tags, recentCases: d.recentCases,
+  };
+}
+
+const _standardDepts: _CompactDept[] = [
+  // ─── 内科集群 ───
+  { name: '心血管内科', id: 'std-cardiovascular', icon: '💓', color: '#1E40AF', bgColor: 'bg-blue-50',
+    aiScore: 96, tags: ['冠脉介入', '心衰数字管理', '血流动力学'],
+    desc: '基于多模态影像（心脏MRI+超声）综合辅助诊断，在缺血性心肌病的影响因子分析上具有显著优势。',
+    radar: [95, 92, 98, 90, 94], memberCount: 38, recentCases: 285,
+    extraTerms: ['冠心病', '心脏MRI', 'FFR测量', '心肌梗死', '心律失常'] },
+  { name: '消化内科', id: 'std-gastro', icon: '🔍', color: '#1D4ED8', bgColor: 'bg-blue-50',
+    aiScore: 92, tags: ['早癌筛查', '内镜AI识别', '微生态分析'],
+    desc: '专注于消化道肿瘤的早期微特征识别，利用AI图像增强技术提升内镜下病灶检出率。',
+    radar: [94, 88, 90, 92, 95], memberCount: 32, recentCases: 245,
+    extraTerms: ['内镜检查', '幽门螺杆菌', '肝硬化', '肠道屏障'] },
+  { name: '呼吸内科', id: 'std-respiratory', icon: '🌬️', color: '#2563EB', bgColor: 'bg-blue-50',
+    aiScore: 93, tags: ['肺结节追踪', '呼吸力学', '感染溯源'],
+    desc: '擅长肺部微小结节的良恶性倍增时间推演，结合气道阻力模型优化呼吸支持方案。',
+    radar: [92, 85, 96, 94, 98], memberCount: 35, recentCases: 260,
+    extraTerms: ['COPD', '肺功能检测', '呼吸机管理', '哮喘'] },
+  { name: '神经内科', id: 'std-neurology', icon: '🧠', color: '#3B82F6', bgColor: 'bg-indigo-50',
+    aiScore: 94, tags: ['脑网络分析', '卒中预警', '神经变性'],
+    desc: '利用脑功能连接组学数据，动态推理神经系统退行性病变的演进轨迹与干预窗口。',
+    radar: [95, 89, 93, 88, 96], memberCount: 30, recentCases: 230,
+    extraTerms: ['帕金森病', '脑卒中', 'EEG监测', '认知障碍'] },
+  { name: '内分泌科', id: 'std-endocrine', icon: '⚗️', color: '#1E3A8A', bgColor: 'bg-blue-50',
+    aiScore: 89, tags: ['代谢调控', '激素级联', '慢病闭环'],
+    desc: '构建人体激素反馈回路的数字化模型，在围术期血糖精准管理与代谢综合征干预中起到核心作用。',
+    radar: [90, 85, 92, 95, 80], memberCount: 28, recentCases: 195,
+    extraTerms: ['糖尿病', '甲亢', '胰岛素抵抗', '骨质疏松'] },
+  { name: '肾内科', id: 'std-nephrology', icon: '💧', color: '#1D4ED8', bgColor: 'bg-sky-50',
+    aiScore: 91, tags: ['滤过率推演', '透析通路', '免疫吸附'],
+    desc: '基于肾小球滤过率大数据的动态衰减模型，精准预测肾功能不可逆损伤的临界点。',
+    radar: [93, 88, 94, 90, 86], memberCount: 26, recentCases: 180,
+    extraTerms: ['慢性肾病', '透析评估', '肾移植评估', '蛋白尿'] },
+  { name: '血液内科', id: 'std-hematology', icon: '🩸', color: '#2563EB', bgColor: 'bg-indigo-50',
+    aiScore: 95, tags: ['细胞免疫', '骨髓图谱', '靶向筛选'],
+    desc: '整合流式细胞术与基因测序数据，为血液系统恶性肿瘤提供精准的靶向药物匹配逻辑。',
+    radar: [98, 96, 90, 92, 95], memberCount: 34, recentCases: 220,
+    extraTerms: ['白血病', '淋巴瘤', '骨髓移植', '血小板减少'] },
+  { name: '风湿免疫科', id: 'std-rheumatology', icon: '💪', color: '#3B82F6', bgColor: 'bg-blue-50',
+    aiScore: 90, tags: ['自身抗体', '炎性风暴', '多系统损伤'],
+    desc: '在MDT中负责自身免疫反应的系统性排查，推理免疫抑制剂在复杂感染背景下的最佳剂量。',
+    radar: [96, 85, 93, 88, 82], memberCount: 24, recentCases: 165,
+    extraTerms: ['类风湿', '红斑狼疮', '免疫抑制', '血管炎'] },
+  { name: '感染科', id: 'std-infectious', icon: '🦠', color: '#1E40AF', bgColor: 'bg-indigo-50',
+    aiScore: 97, tags: ['病原宏基因', '耐药预测', '不明热诊断'],
+    desc: '利用mNGS技术快速锁定疑难病原体，建立抗生素耐药性的概率推演模型。',
+    radar: [99, 90, 98, 94, 85], memberCount: 36, recentCases: 290,
+    extraTerms: ['HIV/AIDS', '结核', '不明热', '院感防控'] },
+  { name: '老年病科', id: 'std-geriatrics', icon: '👴', color: '#60A5FA', bgColor: 'bg-sky-50',
+    aiScore: 86, tags: ['衰弱评估', '多药共用', '全人管理'],
+    desc: '引入老年综合评估(CGA)的数字化算法，自动识别多重用药间的潜在拮抗风险。',
+    radar: [88, 82, 98, 96, 80], memberCount: 26, recentCases: 175,
+    extraTerms: ['衰弱评估', '跌倒预防', '痴呆筛查', '多药管理'] },
+  { name: '变态反应科', id: 'std-allergy', icon: '🌸', color: '#93C5FD', bgColor: 'bg-blue-50',
+    aiScore: 85, tags: ['过敏原谱', '脱敏路径', '免疫耐受'],
+    desc: '通过IgE图谱的大数据分析，精准定位复杂过敏反应的触发源并制定脱敏路径。',
+    radar: [92, 85, 90, 86, 78], memberCount: 18, recentCases: 120,
+    extraTerms: ['哮喘', '食物过敏', '特异性IgE', '荨麻疹'] },
+
+  // ─── 外科集群 ───
+  { name: '普通外科', id: 'std-general-surgery', icon: '⚕️', color: '#6D28D9', bgColor: 'bg-violet-50',
+    aiScore: 95, tags: ['微创技术', '脏器移植', '腹腔解剖'],
+    desc: 'MDT的核心执行层，利用3D腹腔重建技术，术前模拟最佳切除范围与血管保留方案。',
+    radar: [90, 96, 92, 94, 93], memberCount: 40, recentCases: 310,
+    extraTerms: ['腹腔镜', '肝切除', '疝修补', '甲状腺手术'] },
+  { name: '神经外科', id: 'std-neurosurgery', icon: '🔧', color: '#7C3AED', bgColor: 'bg-purple-50',
+    aiScore: 98, tags: ['功能区定位', '术中导航', '颅底重建'],
+    desc: '结合DTI纤维束成像，推理肿瘤切除路径中神经功能损伤的最小概率边界。',
+    radar: [95, 98, 96, 90, 97], memberCount: 30, recentCases: 195,
+    extraTerms: ['脑肿瘤', '脊柱手术', '立体定向', '血管畸形'] },
+  { name: '心胸外科', id: 'std-cardiothoracic', icon: '🫁', color: '#5B21B6', bgColor: 'bg-violet-50',
+    aiScore: 96, tags: ['体外循环', '瓣膜置换', '肺移植'],
+    desc: '在极高风险的心肺手术中，利用AI模型评估围术期血流动力学的极限耐受度。',
+    radar: [92, 97, 98, 93, 94], memberCount: 28, recentCases: 180,
+    extraTerms: ['冠脉搭桥', '食管手术', '肺癌根治', '先心修补'] },
+  { name: '骨科', id: 'std-orthopedics', icon: '🦴', color: '#8B5CF6', bgColor: 'bg-purple-50',
+    aiScore: 93, tags: ['生物力学', '3D打印', '脊柱矫形'],
+    desc: '基于骨骼受力分析模型，定制个性化的关节置换与脊柱内固定植入方案。',
+    radar: [90, 95, 88, 89, 96], memberCount: 36, recentCases: 270,
+    extraTerms: ['关节置换', '骨折内固定', '韧带重建', '脊柱融合'] },
+  { name: '泌尿外科', id: 'std-urology-surgery', icon: '🤖', color: '#6D28D9', bgColor: 'bg-violet-50',
+    aiScore: 94, tags: ['机器人手术', '尿路重建', '功能保留'],
+    desc: '利用达芬奇手术系统的运动数据反馈，优化前列腺与肾脏肿瘤的精准切除逻辑。',
+    radar: [92, 96, 90, 91, 93], memberCount: 26, recentCases: 195,
+    extraTerms: ['前列腺', '肾结石', '膀胱镜', '腹腔镜肾切'] },
+  { name: '整形外科', id: 'std-plastic-surgery', icon: '✨', color: '#7C3AED', bgColor: 'bg-fuchsia-50',
+    aiScore: 88, tags: ['组织瓣修复', '创面愈合', '美学重构'],
+    desc: '将美学指标数字化，推理肿瘤切除后的最佳软组织缺损修复与功能重建方案。',
+    radar: [85, 98, 88, 86, 90], memberCount: 22, recentCases: 140,
+    extraTerms: ['皮瓣移植', '烧伤修复', '微创美容', '瘢痕治疗'] },
+  { name: '介入治疗科', id: 'std-interventional', icon: '🎯', color: '#5B21B6', bgColor: 'bg-purple-50',
+    aiScore: 92, tags: ['肿瘤消融', '血管栓塞', '微创导航'],
+    desc: '在影像引导下，实时计算穿刺路径与消融范围，实现对深部病灶的精准打击。',
+    radar: [90, 94, 92, 93, 98], memberCount: 24, recentCases: 185,
+    extraTerms: ['TACE', '支架植入', '经皮穿刺', '血管造影'] },
+
+  // ─── 妇儿 / 感官 / 精神 ───
+  { name: '妇产科', id: 'std-obstetrics', icon: '👶', color: '#DB2777', bgColor: 'bg-pink-50',
+    aiScore: 91, tags: ['生育保护', '胎儿医学', '内分泌'],
+    desc: '在肿瘤治疗中引入生育力保存算法，平衡母体治疗获益与胎儿发育风险。',
+    radar: [92, 88, 95, 94, 90], memberCount: 35, recentCases: 250,
+    extraTerms: ['妊娠管理', '宫颈癌', '卵巢肿瘤', '产前诊断'] },
+  { name: '儿科', id: 'std-pediatrics', icon: '🧒', color: '#EA580C', bgColor: 'bg-orange-50',
+    aiScore: 89, tags: ['发育评估', '遗传代谢', '药物减量'],
+    desc: '基于儿童生长发育曲线，动态校准MDT治疗方案中的药物剂量与辐射暴露阈值。',
+    radar: [90, 85, 98, 92, 84], memberCount: 38, recentCases: 280,
+    extraTerms: ['新生儿', '哮喘管理', '生长迟缓', '免疫缺陷'] },
+  { name: '耳鼻咽喉头颈外科', id: 'std-ent', icon: '👂', color: '#0D9488', bgColor: 'bg-teal-50',
+    aiScore: 90, tags: ['内镜微创', '听力重建', '气道管理'],
+    desc: '专注于头颈部复杂解剖结构的精细化处理，保障肿瘤治疗后的吞咽与发声功能。',
+    radar: [92, 93, 90, 88, 91], memberCount: 28, recentCases: 195,
+    extraTerms: ['鼻窦手术', '人工耳蜗', '喉癌', '甲状腺'] },
+  { name: '口腔科', id: 'std-dental', icon: '🦷', color: '#059669', bgColor: 'bg-emerald-50',
+    aiScore: 87, tags: ['颌面重建', '咬合功能', '多学科美学'],
+    desc: '利用数字化颌面扫描，在头颈部肿瘤MDT中负责面部轮廓与咀嚼功能的预后模拟。',
+    radar: [88, 92, 85, 86, 90], memberCount: 22, recentCases: 150,
+    extraTerms: ['种植修复', '正颌手术', '口腔癌', '牙周治疗'] },
+  { name: '皮肤科', id: 'std-dermatology', icon: '🔎', color: '#E11D48', bgColor: 'bg-rose-50',
+    aiScore: 88, tags: ['皮肤镜AI', '免疫大疱', '黑色素瘤'],
+    desc: '利用深度学习算法辅助识别皮肤肿瘤的早期恶变特征，提供无创诊断依据。',
+    radar: [95, 84, 88, 90, 92], memberCount: 24, recentCases: 170,
+    extraTerms: ['银屑病', '白癜风', '光疗', '真菌感染'] },
+  { name: '精神心理科', id: 'std-psychiatry', icon: '🧩', color: '#9333EA', bgColor: 'bg-purple-50',
+    aiScore: 84, tags: ['身心同治', '应激干预', '认知评估'],
+    desc: '将患者的心理韧性量化，为重症治疗方案提供患者依从性与精神承受力的评估。',
+    radar: [85, 80, 90, 96, 75], memberCount: 20, recentCases: 130,
+    extraTerms: ['抑郁症', '焦虑障碍', '认知行为', '危机干预'] },
+  { name: '生殖医学科', id: 'std-reproductive', icon: '🧬', color: '#DB2777', bgColor: 'bg-pink-50',
+    aiScore: 93, tags: ['遗传阻断', '胚胎优选', '激素替代'],
+    desc: '通过PGT技术阻断遗传性肿瘤基因的垂直传递，提供生殖遗传层面的终极预防。',
+    radar: [96, 94, 88, 85, 92], memberCount: 25, recentCases: 160,
+    extraTerms: ['试管婴儿', '卵子冷冻', '基因筛查', '内膜容受'] },
+
+  // ─── 急重症与肿瘤 ───
+  { name: '肿瘤科', id: 'std-oncology', icon: '🔴', color: '#DC2626', bgColor: 'bg-red-50',
+    aiScore: 96, tags: ['综合方案', '耐药机制', '免疫联合'],
+    desc: 'MDT的总调度官，整合各科室数据，推理出患者在当前阶段的最优生存获益路径。',
+    radar: [94, 92, 95, 98, 90], memberCount: 45, recentCases: 350,
+    extraTerms: ['化疗方案', '免疫治疗', '靶向药物', '临床试验'] },
+  { name: '急诊科', id: 'std-emergency', icon: '🚑', color: '#EA580C', bgColor: 'bg-orange-50',
+    aiScore: 90, tags: ['分级调度', '生命支持', '中毒解救'],
+    desc: '基于生命体征大数据的实时分诊算法，快速识别潜在的致死性风险并启动绿色通道。',
+    radar: [92, 85, 98, 95, 88], memberCount: 42, recentCases: 380,
+    extraTerms: ['创伤救治', '心肺复苏', '中毒急救', '院前分诊'] },
+  { name: '重症医学科', id: 'std-icu', icon: '🏥', color: '#B91C1C', bgColor: 'bg-red-50',
+    aiScore: 97, tags: ['器官支持', '血流动力', '脓毒症'],
+    desc: 'MDT的安全底线，通过对数千项生理参数的实时监控，精准维持生命体征的微妙平衡。',
+    radar: [90, 88, 99, 96, 85], memberCount: 35, recentCases: 260,
+    extraTerms: ['ECMO', 'CRRT', '机械通气', '感染控制'] },
+  { name: '麻醉科', id: 'std-anesthesia', icon: '💉', color: '#DC2626', bgColor: 'bg-red-50',
+    aiScore: 94, tags: ['围术期管理', '疼痛控制', '脑保护'],
+    desc: '推理围术期应激反应对预后的长期影响，制定精准的麻醉深度与术后镇痛策略。',
+    radar: [92, 90, 98, 95, 88], memberCount: 30, recentCases: 300,
+    extraTerms: ['全身麻醉', '区域阻滞', '术后镇痛', '困难气道'] },
+
+  // ─── 平台支撑 ───
+  { name: '康复医学科', id: 'std-rehabilitation', icon: '🏃', color: '#0891B2', bgColor: 'bg-cyan-50',
+    aiScore: 86, tags: ['功能评定', '早期介入', '物理治疗'],
+    desc: '根据术后组织的愈合模型，推算最佳的康复介入时机，最大化恢复患者生活自理能力。',
+    radar: [88, 85, 90, 94, 82], memberCount: 28, recentCases: 195,
+    extraTerms: ['运动疗法', '言语训练', '神经康复', '假肢适配'] },
+  { name: '医学影像科', id: 'std-radiology', icon: '📡', color: '#0E7490', bgColor: 'bg-cyan-50',
+    aiScore: 99, tags: ['多模态融合', '影像组学', '微小病灶'],
+    desc: "MDT的'天眼'，利用AI影像组学提取肉眼不可见的纹理特征，提前预测肿瘤微转移风险。",
+    radar: [99, 92, 90, 96, 100], memberCount: 35, recentCases: 420,
+    extraTerms: ['CT增强', 'MRI功能', '超声造影', 'AI辅助'] },
+  { name: '病理科', id: 'std-pathology', icon: '🔬', color: '#155E75', bgColor: 'bg-cyan-50',
+    aiScore: 99, tags: ['金标准', '分子分型', '原发灶溯源'],
+    desc: "MDT的'法官'，结合基因检测与组织形态学，给出定性的终极诊断判决。",
+    radar: [100, 88, 95, 94, 98], memberCount: 30, recentCases: 380,
+    extraTerms: ['免疫组化', '基因测序', '冰冻切片', '细胞学'] },
+  { name: '检验科', id: 'std-laboratory', icon: '🧪', color: '#0891B2', bgColor: 'bg-teal-50',
+    aiScore: 95, tags: ['生化趋势', '危急值', '标志物'],
+    desc: '通过对生化指标连续变化的趋势分析，提前预警脏器功能的隐匿性衰竭。',
+    radar: [98, 85, 92, 94, 86], memberCount: 32, recentCases: 400,
+    extraTerms: ['血常规', '生化全套', 'PCR检测', '微生物培养'] },
+  { name: '输血科', id: 'std-transfusion', icon: '🅰️', color: '#0D9488', bgColor: 'bg-teal-50',
+    aiScore: 90, tags: ['血液保障', '成分输血', '不良反应'],
+    desc: '精准计算围术期用血需求，利用血型血清学推理疑难配血的最佳匹配方案。',
+    radar: [95, 80, 98, 92, 85], memberCount: 18, recentCases: 150,
+    extraTerms: ['交叉配血', '自体输血', '血浆置换', '冷沉淀'] },
+  { name: '营养科', id: 'std-nutrition', icon: '🥗', color: '#16A34A', bgColor: 'bg-green-50',
+    aiScore: 83, tags: ['代谢支持', '肠内营养', '免疫调理'],
+    desc: '基于患者的代谢消耗模型，制定精准的围治疗期营养底物支持方案，改善免疫功能。',
+    radar: [85, 88, 86, 90, 80], memberCount: 15, recentCases: 180,
+    extraTerms: ['肠外营养', '特殊医学', '围手术期', '代谢评估'] },
+  { name: '中医科', id: 'std-tcm', icon: '🌿', color: '#15803D', bgColor: 'bg-green-50',
+    aiScore: 85, tags: ['辨证施治', '减毒增效', '体质调理'],
+    desc: '辅助推理中医干预在放化疗期间的减毒增效作用，提供个体化的扶正祛邪方案。',
+    radar: [88, 90, 85, 86, 75], memberCount: 22, recentCases: 160,
+    extraTerms: ['针灸治疗', '中药方剂', '推拿手法', '食疗养生'] },
+  { name: '核医学科', id: 'std-nuclear-medicine', icon: '☢️', color: '#0E7490', bgColor: 'bg-cyan-50',
+    aiScore: 96, tags: ['PET-CT', '核素治疗', '代谢显像'],
+    desc: '从分子代谢层面评估全身肿瘤负荷，是MDT判断肿瘤分期与治疗响应的最敏感工具。',
+    radar: [98, 94, 92, 90, 99], memberCount: 20, recentCases: 210,
+    extraTerms: ['甲状腺碘治', 'SPECT', '放射免疫', '正电子标记'] },
+];
+
+// 合并：10 个医院科室 + 37 个通用标准学科
+export const mockDepartments: Department[] = [
+  ..._hospitalDepartments,
+  ..._standardDepts.map(_buildDept),
+];
+
 /** 匹配规则 lookup */
 const MATCHING_RULES: Record<string, MatchResult[]> = {
   '乳腺癌': [
@@ -717,7 +968,7 @@ export function getMatchResults(query: string): MatchResult[] {
     .map((dept) => ({
       departmentId: dept.id,
       score: Math.max(50, Math.min(99, dept.aiScore + Math.floor(Math.random() * 20 - 10))),
-      reason: `基于AI综合评分分析，${dept.hospital} ${dept.name}在"${trimmed}"相关病例中具备${dept.specialties[0]}等核心能力。`,
+      reason: `基于AI综合评分分析，${dept.hospital ? dept.hospital + ' ' : ''}${dept.name}在"${trimmed}"相关病例中具备${dept.specialties[0]}等核心能力。`,
     }))
     .sort((a, b) => b.score - a.score);
 }
