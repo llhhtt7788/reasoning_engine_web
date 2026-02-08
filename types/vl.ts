@@ -1,5 +1,7 @@
 export interface UploadVLAssetResponse {
   asset_id: string;
+  asset_path: string;
+  display_url: string;
   asset_url: string;
 
   // Optional debug/verification fields returned by backend

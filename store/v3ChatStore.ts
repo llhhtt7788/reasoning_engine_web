@@ -63,7 +63,7 @@ interface V3ChatState {
   // ===== Actions =====
 
   // 添加用户消息
-  addUserMessage: (content: string) => void;
+  addUserMessage: (content: string, imageInfo?: { image_asset_id: string; display_url: string }) => void;
 
   // 添加 loading 状态的 assistant 消息（流式开始）
   addLoadingMessage: () => string;
@@ -77,6 +77,7 @@ interface V3ChatState {
     trace_id?: string;
     quality_decision?: QualityDecision;
     risk_level?: RiskLevel;
+    vision_meta?: Record<string, unknown>;
   }) => void;
 
   // 添加成功的 assistant 消消息（非流式）
@@ -149,13 +150,15 @@ interface V3ChatState {
   clearRagState: () => void;
 
   /**
-   * 统一发送入口（支持非流式 + 流式），可选附带图片资产 URL。
-   * - 当检测到图片时，会自动把最后一个 user message 变成多模态 list，并显式 agent_mode='vl_agent'
+   * 统一发送入口（支持非流式 + 流式），可选附带图片资产 ID。
+   * - 当检测到图片时，会自动设置 agent_mode='vl_agent'
+   * - 只传 image_asset_id，不传 image_url（避免内外网地址混用）
    */
   sendMessage: (params: {
     queryText: string;
     stream?: boolean;
-    imageUrls?: string[];
+    imageAssetId?: string;
+    displayUrl?: string;
     agent_mode?: string;
     // identity
     app_id?: string;
@@ -196,13 +199,14 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
   rerankStep: null,
   gapCheck: null,
 
-  addUserMessage: (content: string) => {
+  addUserMessage: (content: string, imageInfo?: { image_asset_id: string; display_url: string }) => {
     const message: V3ChatMessage = {
       id: generateMessageId(),
       role: 'user',
       status: 'normal',
       content,
       created_at: Date.now(),
+      ...(imageInfo ? { image_asset_id: imageInfo.image_asset_id, display_url: imageInfo.display_url } : {}),
     };
 
     set((state) => ({
@@ -267,6 +271,7 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
               trace_id: data.trace_id,
               quality_decision: data.quality_decision,
               risk_level: data.risk_level,
+              ...(data.vision_meta ? { vision_meta: data.vision_meta } : {}),
             }
           : msg
       );
@@ -502,16 +507,19 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
     gapCheck: null,
   }),
 
-  sendMessage: async ({ queryText, stream = true, imageUrls = [], agent_mode, app_id, user_id }) => {
+  sendMessage: async ({ queryText, stream = true, imageAssetId, displayUrl, agent_mode, app_id, user_id }) => {
     const trimmed = queryText.trim();
-    const hasImages = imageUrls.length > 0;
+    const hasImages = !!imageAssetId;
 
     // 允许"只发图不发字"
     const displayText = trimmed.length > 0 ? trimmed : (hasImages ? '[图片]' : '');
     if (!displayText) return;
 
-    // 1) 写入 user message（展示层仍用纯文本）
-    get().addUserMessage(displayText);
+    // 1) 写入 user message（展示层 + display_url 用于渲染图片）
+    const imageInfo = hasImages && displayUrl
+      ? { image_asset_id: imageAssetId, display_url: displayUrl }
+      : undefined;
+    get().addUserMessage(displayText, imageInfo);
     get().setStreamEvidence([]);
     get().setStreamStage(stream ? 'searching' : null);
     get().clearRagState();
@@ -525,7 +533,7 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
 
     const { selectedLibraryIds, selectedSourceIds, retrievalTopK, retrievalMaxSubqueries } = get();
 
-    // v1-compatible payload (preferred)
+    // v1-compatible payload — 只传 image_asset_id，不传 image_url
     const v1Payload = {
       user: trimmed.length > 0 ? trimmed : '看下图片',
       stream,
@@ -534,7 +542,8 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
       session_id: get().sessionId,
       user_id: identity.user_id,
       app_id: identity.app_id,
-      image_url: hasImages ? imageUrls[0] : undefined,
+      image_asset_id: hasImages ? imageAssetId : undefined,
+      vision_task: hasImages ? 'auto' : undefined,
       // keep: allow explicit agent override, but default to vl_agent when we have images
       agent_mode: agent_mode ?? (hasImages ? 'vl_agent' : undefined),
       // RAG scope params
@@ -602,6 +611,7 @@ export const useV3ChatStore = create<V3ChatState>((set, get) => ({
           trace_id: ev.trace_id,
           quality_decision: ev.quality_decision,
           risk_level: ev.risk_level,
+          vision_meta: ev.vision_meta,
         });
         get().setStreamStage(null);
         if (ev.trace_id) {

@@ -83,6 +83,13 @@ export interface V3ChatMessage {
 
   // 可选：错误结构
   error?: V3ErrorInfo;
+
+  // 可选：图片资产（用户消息）
+  image_asset_id?: string;
+  display_url?: string;
+
+  // 可选：视觉回答元数据（assistant 消息）
+  vision_meta?: Record<string, unknown>;
 }
 
 // ===== 消息内容类型 =====
@@ -112,8 +119,10 @@ export interface V3CommunicateRequest {
   user?: string;
   /** PRD default: conversation_root_id = user_id */
   conversation_root_id?: string;
-  /** v1 VL: a single uploaded asset url */
-  image_url?: string;
+  /** v1 VL: 上传后的图片资产 ID（与 image_url 互斥，优先使用此字段） */
+  image_asset_id?: string;
+  /** VL 任务类型，默认 "auto" */
+  vision_task?: string;
 
   // common identity/session fields
   conversation_id?: string;
@@ -182,6 +191,7 @@ export interface V3DoneEvent {
   retrieval_plan?: Record<string, unknown>;
   retrieval_timeline?: Record<string, unknown>[];
   retrieval_stats?: Record<string, unknown>;
+  vision_meta?: Record<string, unknown>;
 }
 
 export interface V3ErrorEvent {

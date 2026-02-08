@@ -184,6 +184,9 @@ export function v3StreamChat(
               meta: (typeof payload.meta === 'object' && payload.meta !== null)
                 ? payload.meta as Record<string, unknown>
                 : undefined,
+              vision_meta: (typeof payload.vision_meta === 'object' && payload.vision_meta !== null)
+                ? payload.vision_meta as Record<string, unknown>
+                : undefined,
             });
             break;
           }

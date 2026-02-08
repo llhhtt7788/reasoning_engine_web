@@ -15,7 +15,6 @@ import { useIdentityStore } from '@/store/identityStore';
 import { useToastStore } from '@/store/toastStore';
 import { useAgentStore } from '@/store/agentStore';
 import { uploadVlAsset } from '@/lib/vlAssets';
-import { joinBackendUrl } from '@/lib/backend';
 import { useV3ChatStore } from '@/store/v3ChatStore';
 
 const MODE_FADE_DELAY_MS = 1400;
@@ -180,12 +179,14 @@ export const ChatContainer: React.FC = () => {
         const currentImage = imageFile;
 
         // Do NOT mutate UI state (append message) until we ensure upload succeeded.
-        let imageUrls: string[] = [];
+        let imageAssetId: string | undefined;
+        let displayUrl: string | undefined;
 
         if (currentImage) {
           try {
             const resp = await uploadVlAsset(currentImage);
-            imageUrls = [joinBackendUrl(resp.asset_url)];
+            imageAssetId = resp.asset_id;
+            displayUrl = resp.display_url;
 
             // Upload succeeded -> clear image from input immediately.
             setImageFile(null);
@@ -203,19 +204,20 @@ export const ChatContainer: React.FC = () => {
           conversationId: ensuredConversationId,
           sessionId: ensuredSessionId,
           imageFile: currentImage ?? null,
-          image_url: imageUrls[0] ?? null,
+          image_url: imageAssetId ?? null,
         };
 
         if (!sessionId) {
           setSessionId(ensuredSessionId);
         }
 
-        // 统一走 V3 /communicate（多模态通过 messages[].content 传入）
+        // 统一走 V3 /communicate（多模态通过 image_asset_id 传入）
         await useV3ChatStore.getState().sendMessage({
           queryText: message,
           stream: true,
-          imageUrls,
-          agent_mode: imageUrls.length > 0 ? 'vl_agent' : undefined,
+          imageAssetId,
+          displayUrl,
+          agent_mode: imageAssetId ? 'vl_agent' : undefined,
           user_id: userId,
           app_id: appId,
         });

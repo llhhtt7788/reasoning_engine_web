@@ -13,7 +13,6 @@ import { useToastStore } from '@/store/toastStore';
 import { InputBar } from '@/components/InputBar';
 import { RetrievalScopeSelector } from '@/components/v3/RetrievalScopeSelector';
 import { uploadVlAsset } from '@/lib/vlAssets';
-import { joinBackendUrl } from '@/lib/backend';
 import { useIdentityStore } from '@/store/identityStore';
 
 interface V3ChatContainerProps {
@@ -45,8 +44,12 @@ export const V3ChatContainer: React.FC<V3ChatContainerProps> = ({
 
   const pushToast = useToastStore((s) => s.pushToast);
 
-  // 保存最后一次请求用于重试
-  const lastRequestRef = useRef<{ query: string } | null>(null);
+  // 保存最后一次请求用于重试（含 asset_id 以复用已上传资产）
+  const lastRequestRef = useRef<{
+    query: string;
+    imageAssetId?: string;
+    displayUrl?: string;
+  } | null>(null);
 
   // 检查是否有未完成的澄清
   const hasPendingClarify = messages.some(
@@ -57,14 +60,16 @@ export const V3ChatContainer: React.FC<V3ChatContainerProps> = ({
   const handleSend = useCallback(async (query: string) => {
     if (isStreaming) return;
 
-    // Upload first if there's an image.
+    // Upload first if there's an image — 拿到 asset_id 和 display_url
     const currentImage = imageFile;
 
-    let imageUrls: string[] = [];
+    let imageAssetId: string | undefined;
+    let displayUrl: string | undefined;
     if (currentImage) {
       try {
         const resp = await uploadVlAsset(currentImage);
-        imageUrls = [joinBackendUrl(resp.asset_url)];
+        imageAssetId = resp.asset_id;
+        displayUrl = resp.display_url;
         // Upload succeeded -> clear image from input immediately.
         setImageFile(null);
       } catch (e) {
@@ -75,16 +80,17 @@ export const V3ChatContainer: React.FC<V3ChatContainerProps> = ({
       }
     }
 
-    // 允许“只发图不发字”
-    if (!query.trim() && imageUrls.length === 0) return;
+    // 允许"只发图不发字"
+    if (!query.trim() && !imageAssetId) return;
 
-    lastRequestRef.current = { query };
+    lastRequestRef.current = { query, imageAssetId, displayUrl };
 
     await sendMessage({
       queryText: query,
       stream: enableStream,
-      imageUrls,
-      agent_mode: imageUrls.length > 0 ? 'vl_agent' : undefined,
+      imageAssetId,
+      displayUrl,
+      agent_mode: imageAssetId ? 'vl_agent' : undefined,
       user_id: effectiveUserId,
       app_id: effectiveAppId,
     });
@@ -104,12 +110,20 @@ export const V3ChatContainer: React.FC<V3ChatContainerProps> = ({
     handleSend(answer);
   }, [handleSend]);
 
-  // 重试
+  // 重试：复用已上传的 asset_id，直接调 sendMessage 避免重新上传
   const handleRetry = useCallback(() => {
-    if (lastRequestRef.current) {
-      handleSend(lastRequestRef.current.query);
-    }
-  }, [handleSend]);
+    const last = lastRequestRef.current;
+    if (!last) return;
+    sendMessage({
+      queryText: last.query,
+      stream: enableStream,
+      imageAssetId: last.imageAssetId,
+      displayUrl: last.displayUrl,
+      agent_mode: last.imageAssetId ? 'vl_agent' : undefined,
+      user_id: effectiveUserId,
+      app_id: effectiveAppId,
+    });
+  }, [sendMessage, enableStream, effectiveUserId, effectiveAppId]);
 
   // 复制 trace_id
   const handleCopyTraceId = useCallback(async (traceId: string) => {

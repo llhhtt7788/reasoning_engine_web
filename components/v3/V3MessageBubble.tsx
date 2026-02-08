@@ -13,6 +13,7 @@ import { EvidencePanel } from './EvidencePanel';
 import { ClarifyCard } from './ClarifyCard';
 import { ErrorCard } from './ErrorCard';
 import { PendingReviewCard } from './PendingReviewCard';
+import { useV3ChatStore } from '@/store/v3ChatStore';
 
 interface V3MessageBubbleProps {
   message: V3ChatMessage;
@@ -31,6 +32,17 @@ export const V3MessageBubble: React.FC<V3MessageBubbleProps> = ({
 }) => {
   const { role, status, content } = message;
 
+  const streamStage = useV3ChatStore((s) => s.streamStage);
+
+  const stageLabel = useMemo(() => {
+    switch (streamStage) {
+      case 'searching': return '正在搜索...';
+      case 'generating': return '正在生成...';
+      case 'validating': return '正在校验...';
+      default: return '正在思考...';
+    }
+  }, [streamStage]);
+
   // 渲染 Markdown 内容
   const renderedHtml = useMemo(() => {
     if (role === 'user' || !content) return '';
@@ -42,9 +54,21 @@ export const V3MessageBubble: React.FC<V3MessageBubbleProps> = ({
     return (
       <div className="flex justify-end mb-5">
         <div className="max-w-[85%] rounded-2xl px-4 py-3.5 bg-blue-600 text-white shadow-sm">
-          <div className="whitespace-pre-wrap text-[15px] leading-7 tracking-[0.01em] break-words">
-            {content}
-          </div>
+          {message.display_url && (
+            <div className="mb-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={message.display_url}
+                alt="上传图片"
+                className="max-w-full max-h-60 rounded-lg object-contain"
+              />
+            </div>
+          )}
+          {content && content !== '[图片]' && (
+            <div className="whitespace-pre-wrap text-[15px] leading-7 tracking-[0.01em] break-words">
+              {content}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -109,7 +133,7 @@ export const V3MessageBubble: React.FC<V3MessageBubbleProps> = ({
           ) : (
             <div className="flex items-center gap-2 text-gray-500 text-sm">
               <LoadingDots />
-              <span>正在思考...</span>
+              <span>{stageLabel}</span>
             </div>
           )}
         </div>
